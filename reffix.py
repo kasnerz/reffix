@@ -37,16 +37,18 @@ logger = logging.getLogger(__name__)
 
 dblp_api = "https://dblp.org/search/publ/api"
 
-def get_dblp_results(title, bp):
+def get_dblp_results(title):
     params = {
         "format" : "bib",
         "q" : title
     }
     res = requests.get(dblp_api, params=params)
-
     try:
         if res.status_code == 200:
+            # new instance needs to be created to use a new database
+            bp = BibTexParser(interpolate_strings=False, common_strings=True)
             bib = bp.parse(res.text)
+
             return bib.entries
     except Exception as e:
         logger.exception(e)
@@ -168,13 +170,13 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
 
     with open(in_file) as bibtex_file:
         bib_database = bibtexparser.load(bibtex_file, parser=bp)
-
         logger.info("[INFO] Bibliography file loaded successfully.")
+        orig_entries_cnt = len(bib_database.entries)
 
         for i in range(len(bib_database.entries)):
             orig_entry = bib_database.entries[i]
             title = orig_entry["title"]
-            entries = get_dblp_results(title, bp=bp)
+            entries = get_dblp_results(title)
             entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)
 
             if entry:
@@ -207,10 +209,12 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
                         bib_database.entries[i]["title"] = new_title
                         logger.info(f"[INFO] Using custom titlecasing: {new_title}")
 
+    new_entries_cnt = len(bib_database.entries)
+    assert orig_entries_cnt == new_entries_cnt
 
     with open(out_file, "w") as f:
         bibtex_str = bibtexparser.dump(bib_database, f)
-        logger.info(f"Saving into {out_file}.")
+        logger.info(f"[FINISHED] Saving the results to {out_file}.")
     
 
 if __name__ == '__main__':
