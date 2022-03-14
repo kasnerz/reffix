@@ -8,7 +8,10 @@
 :arrow_right: The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references.
 
 ## Example
-**Before update**
+**Before the update:** 
+- :negative_squared_cross_mark: arXiv version 
+- :negative_squared_cross_mark: no URL 
+- :negative_squared_cross_mark: capitalization lost
 ```
 {
     'ENTRYTYPE': 'inproceedings',
@@ -21,7 +24,10 @@
 }
 ```
 
-**After update**
+**After the update:**
+- :ballot_box_with_check: ACL version
+- :ballot_box_with_check: URL included
+- :ballot_box_with_check: capitalization preserved 
 ```
  {  
     'ENTRYTYPE': 'inproceedings',
@@ -71,7 +77,7 @@ git clone https://github.com/kasnerz/reffix.git
 cd reffix
 pip install -r requirements.txt
 ```
-2. Run the script simply with the .bib file as the first argument:
+2. Run the script with the .bib file as the first argument:
 ```
 ./reffix.py path/to/bibtex_file.bib
 ```
@@ -81,7 +87,7 @@ Or with all the features enabled:
 ```
 ### Flags
 | short | long | description |
-| ---------- | --------- |-----------  |
+| ---------- | ---------------------- |-----------  |
 | `-o`       | `--out`   | Output filename. If not specified, the default filename `<original_name>.fixed` is used. |
 | `-i` | `--interact` | Interactive mode. Every replacement of an entry with DBLP result has to be confirmed manually. |
 | `-a` | `--replace_arxiv` | Replace arXiv versions. If a non-arXiv version (e.g. published at a conference or in a journal) is found at DBLP, it is preferred to the arXiv version. |
@@ -94,4 +100,4 @@ If you want to make sure that *reffix* does not introduce any unwanted changes, 
 
 The tool depends on **DBLP API** which is subject to change. I will try to update the project if necessary, but it may still occasionally break. I welcome any pull requests with improvements.
 
-Please, be also considerate regarding the DBLP API and do not generate high traffic for their servers.
+Please be considerate regarding the DBLP API and do not generate high traffic for their servers.
