@@ -93,13 +93,16 @@ def get_best_entry(entries, orig_entry):
     if not entries:
         return None
 
-    equivalent_entry = get_equivalent_entry(entries, orig_entry)
+    if len(entries) == 1:
+        return entries[0]
 
+    equivalent_entry = get_equivalent_entry(entries, orig_entry)
     if equivalent_entry:
         return equivalent_entry
 
-    # taking the results with most fields
-    entries.sort(key=lambda x: len(x.keys()))
+    # sorting the results by year (newer is better) and by the number of entries (more is better)
+    entries.sort(key=lambda x: (int(x.get("year", 0)), len(x.keys())))
+
     return entries[-1]
 
 
