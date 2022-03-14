@@ -1,4 +1,4 @@
-# reffix: Fixing a BibTeX reference list using DBLP API :wrench:
+# reffix: Fixing BibTeX reference list with DBLP API :wrench:
 
 :arrow_right: *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs or using arXiv pre-prints instead of published version.
 
