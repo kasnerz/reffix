@@ -1,6 +1,6 @@
 # reffix: Fixing BibTeX reference list with DBLP API :wrench:
 
-:arrow_right: *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs or using arXiv pre-prints instead of published version.
+:arrow_right: *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs, or using arXiv pre-prints instead of published version.
 
 
 :arrow_right: *Reffix* uses a **conservative approach** to keep your bibliography valid. It also does not require any local database of papers since it uses online queries to **DBLP API**.
@@ -56,7 +56,7 @@
 ## Main features
 - **Completing references** – *reffix* queries DBLP API to find a complete reference for each entry in the BibTeX file. 
 - **Replacing arXiv preprints** –  *reffix* can replace arXiv pre-prints with the version published at a conference or in a journal.
-- **Preserving titlecase** – in order to [preserve correct casing](https://tex.stackexchange.com/questions/10772/bibtex-loses-capitals-when-creating-bbl-file), *reffix* wraps individual title-cased words in the title using the curly brackets
+- **Preserving titlecase** – in order to [preserve correct casing](https://tex.stackexchange.com/questions/10772/bibtex-loses-capitals-when-creating-bbl-file), *reffix* wraps individual title-cased words in the title using the curly brackets.
 - **Conservative approach**: 
   + the original .bib file is preserved 
   + no references are deleted
