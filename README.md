@@ -1,9 +1,9 @@
-# reffix: A tool for fixing a BibTeX reference list using DBLP API :wrench:
+# reffix: Fixing a BibTeX reference list using DBLP API :wrench:
 
 :arrow_right: *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs or using arXiv pre-prints instead of published version.
 
 
-:arrow_right: *Reffix* uses a **conservative approach** to keep your bibliography valid. It also does not require any local database of papers since it uses online queries for **DBLP API**.
+:arrow_right: *Reffix* uses a **conservative approach** to keep your bibliography valid. It also does not require any local database of papers since it uses online queries to **DBLP API**.
 
 :arrow_right: The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references.
 
