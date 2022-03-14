@@ -8,51 +8,49 @@
 :arrow_right: The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references.
 
 ## Example
-**Before the update:** 
+**Before the update (Google Scholar):** 
 - :negative_squared_cross_mark: arXiv version 
 - :negative_squared_cross_mark: no URL 
 - :negative_squared_cross_mark: capitalization lost
 ```
-{
-    'ENTRYTYPE': 'inproceedings',
-    'ID': 'Lee2018HigherorderCR',
-    'author': 'Kenton Lee and Luheng He and L. Zettlemoyer',
-    'booktitle': 'NAACL-HLT',
-    'title': 'Higher-order Coreference Resolution with Coarse-to-fine '
-             'Inference',
-    'year': '2018'
-}
-```
-
-**After the update:**
-- :ballot_box_with_check: ACL version
-- :ballot_box_with_check: URL included
-- :ballot_box_with_check: capitalization preserved 
-```
  {  
-    'ENTRYTYPE': 'inproceedings',
-    'ID': 'Lee2018HigherorderCR',
-    'author': 'Kenton Lee and\nLuheng He and\nLuke Zettlemoyer',
-    'bibsource': 'dblp computer science bibliography, https://dblp.org',
-    'biburl': 'https://dblp.org/rec/conf/naacl/LeeHZ18.bib',
-    'booktitle': 'Proceedings of the 2018 Conference of the North American '
-                 'Chapter of\n'
-                 'the Association for Computational Linguistics: Human '
-                 'Language Technologies,\n'
-                 'NAACL-HLT, New Orleans, Louisiana, USA, June 1-6, 2018, '
-                 'Volume 2 (Short\n'
-                 'Papers)',
-    'doi': '10.18653/v1/n18-2108',
-    'editor': 'Marilyn A. Walker and\nHeng Ji and\nAmanda Stent',
-    'pages': '687--692',
-    'publisher': 'Association for Computational Linguistics',
-    'timestamp': 'Fri, 06 Aug 2021 01:00:00 +0200',
-    'title': '{Higher-Order} {Coreference} {Resolution} with {Coarse-to-Fine} '
-             '{Inference}',
-    'url': 'https://doi.org/10.18653/v1/n18-2108',
-    'year': '2018'
+    'ENTRYTYPE': 'article',
+    'ID': 'duvsek2020evaluating',
+    'author': 'Du{\\v{s}}ek, Ond{\\v{r}}ej and Kasner, Zden{\\v{e}}k',
+    'journal': 'arXiv preprint arXiv:2011.10819',
+    'title': 'Evaluating semantic accuracy of data-to-text generation with '
+             'natural language inference',
+    'year': '2020'
 }
 
+```
+**After the update (DBLP + preserving capitalization):**
+- :heavy_check_mark: ACL version
+- :heavy_check_mark: URL included
+- :heavy_check_mark: capitalization preserved 
+```
+ {   
+    'ENTRYTYPE': 'inproceedings',
+    'ID': 'duvsek2020evaluating',
+    'author': 'Ondrej Dusek and\nZdenek Kasner',
+    'bibsource': 'dblp computer science bibliography, https://dblp.org',
+    'biburl': 'https://dblp.org/rec/conf/inlg/DusekK20.bib',
+    'booktitle': 'Proceedings of the 13th International Conference on Natural '
+                 'Language\n'
+                 'Generation, {INLG} 2020, Dublin, Ireland, December 15-18, '
+                 '2020',
+    'editor': 'Brian Davis and\n'
+              'Yvette Graham and\n'
+              'John D. Kelleher and\n'
+              'Yaji Sripada',
+    'pages': '131--137',
+    'publisher': 'Association for Computational Linguistics',
+    'timestamp': 'Mon, 03 Jan 2022 00:00:00 +0100',
+    'title': '{Evaluating} {Semantic} {Accuracy} of {Data-to-Text} '
+             '{Generation} with {Natural} {Language} {Inference}',
+    'url': 'https://aclanthology.org/2020.inlg-1.19/',
+    'year': '2020'
+}
 ```
 
 ## Main features
@@ -66,7 +64,7 @@
   + the version of the paper corresponding to the original entry should be selected first
 - **Interactive mode** – you can confirm every change manually.
 
-The package uses [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) for parsing the BibTex files, [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html) for updating the references and the [titlecase](https://github.com/ppannuto/python-titlecase) package for optional titlecasing of papers not found in DBLP.
+The package uses [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) for parsing the BibTex files, [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html) for updating the references, and the [titlecase](https://github.com/ppannuto/python-titlecase) package for optional extra titlecasing of the titles.
 
 
 ## Usage
