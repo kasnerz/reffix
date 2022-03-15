@@ -80,7 +80,7 @@ def get_equivalent_entry(entries, orig_entry):
             return entry
 
         # venue of one of the entries matches or is a substring of the other entry
-        venue_match = ("booktitle" in entry and "booktitle" in orig_entry and 
+        venue_match = ("booktitle" in entry and "booktitle" in orig_entry and
                 (entry["booktitle"] in orig_entry["booktitle"] or orig_entry["booktitle"] in entry["booktitle"]))
 
         if year_match and venue_match:
@@ -218,7 +218,7 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
     with open(out_file, "w") as f:
         bibtex_str = bibtexparser.dump(bib_database, f)
         logger.info(f"[FINISHED] Saving the results to {out_file}.")
-    
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -236,12 +236,13 @@ if __name__ == '__main__':
     else:
         out_file = args.out
 
-    os.makedirs(os.path.dirname(out_file), exist_ok=True)
+    out_dir = os.path.dirname(out_file) if os.path.dirname(out_file) else '.'
+    os.makedirs(out_dir, exist_ok=True)
 
     main(
-        in_file=args.in_file, 
-        out_file=out_file, 
-        replace_arxiv=args.replace_arxiv, 
+        in_file=args.in_file,
+        out_file=out_file,
+        replace_arxiv=args.replace_arxiv,
         force_titlecase=args.force_titlecase,
         interact=args.interact
     )
