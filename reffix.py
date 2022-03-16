@@ -117,7 +117,7 @@ def get_authors_canonical(entry):
         authors = bc.author(entry.copy())
         authors = bc.convert_to_unicode(authors)["author"]
         authors = [unidecode.unidecode(name) for name in authors]
-        authors = [bc.splitname(a) for a in authors]
+        authors = [bc.splitname(a, strict_mode=False) for a in authors]
         authors = [" ".join(a["first"]) + " " + " ".join(a["last"]) for a in authors]
     except (bc.InvalidName, TypeError):
         return []
