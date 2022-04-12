@@ -37,10 +37,10 @@ logger = logging.getLogger(__name__)
 
 dblp_api = "https://dblp.org/search/publ/api"
 
-def get_dblp_results(title):
+def get_dblp_results(query):
     params = {
         "format" : "bib",
-        "q" : title
+        "q" : query
     }
     res = requests.get(dblp_api, params=params)
     try:
@@ -186,10 +186,16 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
         for i in range(len(bib_database.entries)):
             orig_entry = bib_database.entries[i]
             title = orig_entry["title"]
-            entries = get_dblp_results(title)
+            try:
+                first_author = get_authors_canonical(orig_entry)[0]
+            except IndexError:
+                first_author = ""
+
+            query = title + " " + first_author
+            entries = get_dblp_results(query)
             entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)
 
-            if entry:
+            if entry is not None:
                 entry = fix_reflabel(entry, orig_entry)
                 entry["title"] = protect_titlecase(entry["title"])
 
