@@ -216,7 +216,8 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
                 if conf == "y":
                     bib_database.entries[i] = entry
             else:
-                logging.info(f"[KEEP] No result found, keeping the original entry: {title}")
+                # No result found, keeping the original entry
+                logging.info(f"[KEEP] {title}")
 
                 if force_titlecase:
                     new_title = to_titlecase(title)
@@ -249,7 +250,7 @@ if __name__ == '__main__':
     else:
         out_file = args.out
 
-    os.makedirs(os.path.dirname(out_file), exist_ok=True)
+    # os.makedirs(os.path.dirname(out_file), exist_ok=True)
 
     main(
         in_file=args.in_file, 
@@ -258,3 +259,4 @@ if __name__ == '__main__':
         force_titlecase=args.force_titlecase,
         interact=args.interact
     )
+    logger.info(f"Output saved in {out_file}")
