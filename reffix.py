@@ -184,6 +184,10 @@ def select_entry(entries, orig_entry, replace_arxiv):
 
     for entry in entries:
         title = re.sub(r"[^0-9a-zA-Z]+", "", entry["title"]).lower()
+
+        if "author" not in entry:
+            continue
+
         authors = get_authors_canonical(entry)
 
         # keep only entries where at least one of the authors is also present in the original entry
@@ -198,7 +202,6 @@ def select_entry(entries, orig_entry, replace_arxiv):
         if entries_other:
             entry = get_best_entry(entries_other, orig_entry)
         else:
-            logger.info(f"[INFO] Found arXiv entry only: {orig_entry['title']}")
             entry = get_best_entry(entries_arxiv, orig_entry)
     else:
         entry = get_best_entry(matching_entries, orig_entry)
@@ -252,8 +255,8 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
 
                     if is_equivalent(entry, orig_entry):
                         # the entry is equivalent, using the DBLP bib entry
-                        logging.info(f"[KEEP] {log_title(entry['title'])}")
-                    elif is_arxiv(orig_entry) and not is_arxiv(entry):
+                        logging.info(f"[UPDATE] {log_title(entry['title'])}")
+                    elif replace_arxiv and is_arxiv(orig_entry) and not is_arxiv(entry):
                         # non-arxiv version was found on DBLP
                         logging.info(f"[UPDATE_ARXIV] {log_title(entry['title'])}")
                     else:
@@ -267,7 +270,7 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
 
                 title = protect_titlecase(title)
                 bib_database.entries[i]["title"] = title
-                logging.info(f"[NO_CHANGE] {log_title(title)}")
+                logging.info(f"[KEEP] {log_title(title)}")
 
     new_entries_cnt = len(bib_database.entries)
     assert orig_entries_cnt == new_entries_cnt
@@ -280,7 +283,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", type=str, help="Bibliography file")
     parser.add_argument("-o", "--out", type=str, default=None, help="Output file")
-    parser.add_argument("-a", "--replace_arxiv", action="store_true", help="")
+    parser.add_argument("-a", "--replace_arxiv", action="store_true",
+        help="Try to use a non-arXiv version whenever possible")
     parser.add_argument("-t", "--force_titlecase", action="store_true", 
         help="Use the `titlecase` package to fix titlecasing for paper names which are not titlecased")
     parser.add_argument("-i", "--interact", action="store_true", help="Interactive mode - confirm every change")
