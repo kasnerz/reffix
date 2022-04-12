@@ -157,7 +157,7 @@ def get_authors_canonical(entry):
         authors = bc.convert_to_unicode({"author": entry_tmp["author"]})["author"]
         # convert special unicode characters to ascii
         authors = [unidecode.unidecode(name) for name in authors]
-        authors = [bc.splitname(a) for a in authors]
+        authors = [bc.splitname(a, strict_mode=False) for a in authors]
         authors = [" ".join(a["first"]) + " " + " ".join(a["last"]) for a in authors]
     except (bc.InvalidName, TypeError) as x:
         logger.warning(f"[WARNING] Cannot parse authors: {entry_tmp['author']}")
@@ -275,7 +275,6 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
     with open(out_file, "w") as f:
         bibtex_str = bibtexparser.dump(bib_database, f)
         logger.info(f"[FINISH] Saving the results to {out_file}.")
-    
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -294,12 +293,13 @@ if __name__ == '__main__':
     else:
         out_file = args.out
 
-    # os.makedirs(os.path.dirname(out_file), exist_ok=True)
+    out_dir = os.path.dirname(out_file) if os.path.dirname(out_file) else '.'
+    os.makedirs(out_dir, exist_ok=True)
 
     main(
-        in_file=args.in_file, 
-        out_file=out_file, 
-        replace_arxiv=args.replace_arxiv, 
+        in_file=args.in_file,
+        out_file=out_file,
+        replace_arxiv=args.replace_arxiv,
         force_titlecase=args.force_titlecase,
         interact=args.interact
     )
