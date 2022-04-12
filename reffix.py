@@ -113,13 +113,21 @@ def is_arxiv(entry):
     return "arxiv" in journal + eprinttype + url
 
 def get_authors_canonical(entry):
-    try:
-        authors = bc.author(entry.copy())
+    try:    
+        # bc.author modifies the entry in place
+        entry_tmp = entry.copy()
+        # "and others" may break the parser
+        entry_tmp["author"] = entry_tmp["author"].replace("and others", "")
+        # convert the string with author names to list
+        authors = bc.author(entry_tmp)
+        # convert LaTeX special characters to unicode
         authors = bc.convert_to_unicode(authors)["author"]
+        # convert special unicode characters to ascii
         authors = [unidecode.unidecode(name) for name in authors]
         authors = [bc.splitname(a) for a in authors]
         authors = [" ".join(a["first"]) + " " + " ".join(a["last"]) for a in authors]
     except (bc.InvalidName, TypeError):
+        logger.warning(f"[WARNING] Cannot parse authors: {entry['author']}")
         return []
     except Exception as e:
         logger.exception(e)
@@ -136,7 +144,6 @@ def select_entry(entries, orig_entry, replace_arxiv):
     # keep only entries with matching title, ignoring casing and non-alpha numeric characters
     # (some titles are returned with trailing dot, dashes may be inconsistent, etc.)
     orig_title = re.sub(r"[^0-9a-zA-Z]+", "", orig_entry["title"]).lower()
-
     # keep only entries where at least one of the authors is also present in the original entry
     orig_authors = get_authors_canonical(orig_entry)
 
