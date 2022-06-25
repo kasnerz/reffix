@@ -114,12 +114,12 @@ def is_arxiv(entry):
 
 def get_authors_canonical(entry):
     try:
-        authors = bc.author(entry.copy())
+        authors = bc.author({'author': entry.get('author', '')})
         authors = bc.convert_to_unicode(authors)["author"]
         authors = [unidecode.unidecode(name) for name in authors]
         authors = [bc.splitname(a, strict_mode=False) for a in authors]
         authors = [" ".join(a["first"]) + " " + " ".join(a["last"]) for a in authors]
-    except (bc.InvalidName, TypeError):
+    except (bc.InvalidName, TypeError, KeyError):
         return []
     except Exception as e:
         logger.exception(e)
@@ -160,6 +160,9 @@ def select_entry(entries, orig_entry, replace_arxiv):
     else:
         entry = get_best_entry(matching_entries, orig_entry)
 
+    if entry and is_arxiv(entry) and not is_arxiv(orig_entry):
+        logger.info(f"[INFO] Will not replace a conference entry with arXiv: {orig_entry['title']}")
+        return None
     return entry
 
 
@@ -216,7 +219,9 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
     assert orig_entries_cnt == new_entries_cnt
 
     with open(out_file, "w") as f:
-        bibtex_str = bibtexparser.dump(bib_database, f)
+        bwriter = bibtexparser.bwriter.BibTexWriter()
+        bwriter.order_entries_by = None
+        bibtex_str = bibtexparser.dump(bib_database, f, writer=bwriter)
         logger.info(f"[FINISHED] Saving the results to {out_file}.")
 
 
