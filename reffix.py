@@ -37,10 +37,10 @@ logger = logging.getLogger(__name__)
 
 dblp_api = "https://dblp.org/search/publ/api"
 
-def get_dblp_results(title):
+def get_dblp_results(query):
     params = {
         "format" : "bib",
-        "q" : title
+        "q" : query
     }
     res = requests.get(dblp_api, params=params)
     try:
@@ -55,6 +55,8 @@ def get_dblp_results(title):
         raise e
 
 def protect_titlecase(title):
+    # wrap the capital letters in curly braces to protect them
+    # see https://tex.stackexchange.com/questions/10772/bibtex-loses-capitals-when-creating-bbl-file
     words = []
 
     for word in title.split():
@@ -67,29 +69,38 @@ def protect_titlecase(title):
 
 
 def to_titlecase(title):
-    new_title = titlecase.titlecase(title)
-    return protect_titlecase(new_title)
+    # use the titlecase package to capitalize first letters (note that this may not be accurate)
+    return titlecase.titlecase(title)
+
+
+def is_equivalent(entry, orig_entry):
+    # a bit more bulletproof (because of variability in the names of venues): year and pages match
+    year_match = ("year" in entry and "year" in orig_entry and entry["year"] == orig_entry["year"])
+    pages_match = ("pages" in entry and "pages" in orig_entry and entry["pages"] == orig_entry["pages"])
+
+    if year_match and pages_match:
+        return True
+
+    # venue of one of the entries matches or is a substring of the other entry
+    venue_match = ("booktitle" in entry and "booktitle" in orig_entry and
+            (entry["booktitle"] in orig_entry["booktitle"] or orig_entry["booktitle"] in entry["booktitle"]))
+
+    if year_match and venue_match:
+        return True
+
+    return False
 
 
 def get_equivalent_entry(entries, orig_entry):
     for entry in entries:
-        year_match = ("year" in entry and "year" in orig_entry and entry["year"] == orig_entry["year"])
-        pages_match = ("pages" in entry and "pages" in orig_entry and entry["pages"] == orig_entry["pages"])
-
-        if year_match and pages_match:
-            return entry
-
-        # venue of one of the entries matches or is a substring of the other entry
-        venue_match = ("booktitle" in entry and "booktitle" in orig_entry and
-                (entry["booktitle"] in orig_entry["booktitle"] or orig_entry["booktitle"] in entry["booktitle"]))
-
-        if year_match and venue_match:
+        if is_equivalent(entry, orig_entry):
             return entry
 
     return None
 
 
 def get_best_entry(entries, orig_entry):
+    # return the most appropriate result given a list of results and the original entry
     if not entries:
         return None
 
@@ -107,19 +118,53 @@ def get_best_entry(entries, orig_entry):
 
 
 def is_arxiv(entry):
+    # find if the entry comes from arXiv
     journal = entry.get("journal", "").lower()
     eprinttype = entry.get("eprinttype", "").lower()
     url = entry.get("url", "").lower()
     return "arxiv" in journal + eprinttype + url
 
+
+def is_titlecased(title):
+    # find if the title is correctly capitalized (this heuristics could definitely be improved)
+    words = title.split()
+    nr_uppercased = sum([int(w[0].isupper()) for w in words])
+
+    if len(words) <= 2:
+        return nr_uppercased == len(words)
+    elif len(words) <= 4:
+        return nr_uppercased >= 2
+    else:
+        return nr_uppercased >= 3
+
+
+def log_title(title):
+    return title.replace("\n", " ").replace("{", "").replace("}", "")
+
+
 def get_authors_canonical(entry):
     try:
-        authors = bc.author({'author': entry.get('author', '')})
-        authors = bc.convert_to_unicode(authors)["author"]
+        # bc.author modifies the entry in place -> copy
+        # we only need the author, so drop everything else
+        entry_tmp = {"author": entry["author"]}
+        # removing what the parser cannot read
+        entry_tmp["author"] = entry_tmp["author"]\
+            .replace("and others", "")\
+            .replace("~", " ")
+
+        # convert the string with author names to list
+        entry_tmp = bc.author(entry_tmp)
+        # convert LaTeX special characters to unicode
+        authors = bc.convert_to_unicode({"author": entry_tmp["author"]})["author"]
+        # convert special unicode characters to ascii
         authors = [unidecode.unidecode(name) for name in authors]
         authors = [bc.splitname(a, strict_mode=False) for a in authors]
         authors = [" ".join(a["first"]) + " " + " ".join(a["last"]) for a in authors]
-    except (bc.InvalidName, TypeError, KeyError):
+    except (bc.InvalidName, TypeError) as x:
+        logger.warning(f"[WARNING] Cannot parse authors: {entry_tmp['author']}")
+        return []
+    except KeyError:
+        logger.warning(f"[WARNING] No authors found: {entry['title']}")
         return []
     except Exception as e:
         logger.exception(e)
@@ -136,14 +181,17 @@ def select_entry(entries, orig_entry, replace_arxiv):
     # keep only entries with matching title, ignoring casing and non-alpha numeric characters
     # (some titles are returned with trailing dot, dashes may be inconsistent, etc.)
     orig_title = re.sub(r"[^0-9a-zA-Z]+", "", orig_entry["title"]).lower()
-
-    # keep only entries where at least one of the authors is also present in the original entry
     orig_authors = get_authors_canonical(orig_entry)
 
     for entry in entries:
         title = re.sub(r"[^0-9a-zA-Z]+", "", entry["title"]).lower()
+
+        if "author" not in entry:
+            continue
+
         authors = get_authors_canonical(entry)
 
+        # keep only entries where at least one of the authors is also present in the original entry
         if title == orig_title and len(set(orig_authors).intersection(set(authors))) > 0:
             matching_entries.append(entry)
 
@@ -155,7 +203,6 @@ def select_entry(entries, orig_entry, replace_arxiv):
         if entries_other:
             entry = get_best_entry(entries_other, orig_entry)
         else:
-            logger.info(f"[INFO] Found arXiv entry only: {orig_entry['title']}")
             entry = get_best_entry(entries_arxiv, orig_entry)
     else:
         entry = get_best_entry(matching_entries, orig_entry)
@@ -163,11 +210,6 @@ def select_entry(entries, orig_entry, replace_arxiv):
     if entry and is_arxiv(entry) and not is_arxiv(orig_entry):
         logger.info(f"[INFO] Will not replace a conference entry with arXiv: {orig_entry['title']}")
         return None
-    return entry
-
-
-def fix_reflabel(entry, orig_entry):
-    entry["ID"] = orig_entry["ID"]
     return entry
 
 
@@ -182,13 +224,24 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
         for i in range(len(bib_database.entries)):
             orig_entry = bib_database.entries[i]
             title = orig_entry["title"]
-            entries = get_dblp_results(title)
+            try:
+                first_author = get_authors_canonical(orig_entry)[0]
+            except IndexError:
+                first_author = ""
+
+            query = title + " " + first_author
+            entries = get_dblp_results(query)
             entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)
 
-            if entry:
-                entry = fix_reflabel(entry, orig_entry)
-                entry["title"] = protect_titlecase(entry["title"])
+            if entry is not None:
+                # replace the new BibTeX reference label with the original one
+                entry["ID"] = orig_entry["ID"]
 
+                # if the title is titlecased in the original entry, do not modify it
+                if force_titlecase and not is_titlecased(entry["title"]):
+                    entry["title"] = to_titlecase(entry["title"])
+
+                entry["title"] = protect_titlecase(entry["title"])
                 orig_str = pprint.pformat(orig_entry, indent=4)
                 new_str = pprint.pformat(entry, indent=4)
                 conf = "y"
@@ -201,19 +254,27 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
                         if conf == "y" or conf == "n":
                             break
                         print("Please accept (y) or reject (n) the change.")
-                else:
-                    logging.info(f"[UPDATE] {title}")
                 if conf == "y":
                     bib_database.entries[i] = entry
+
+                    if is_equivalent(entry, orig_entry):
+                        # the entry is equivalent, using the DBLP bib entry
+                        logging.info(f"[UPDATE] {log_title(entry['title'])}")
+                    elif replace_arxiv and is_arxiv(orig_entry) and not is_arxiv(entry):
+                        # non-arxiv version was found on DBLP
+                        logging.info(f"[UPDATE_ARXIV] {log_title(entry['title'])}")
+                    else:
+                        # a different version was found on DBLP
+                        logging.info(f"[UPDATE] {log_title(entry['title'])}")
+
             else:
-                logging.info(f"[KEEP] No result found, keeping the original entry: {title}")
+                # no result found, keeping the original entry
+                if force_titlecase and not is_titlecased(title):
+                    title = to_titlecase(title)
 
-                if force_titlecase:
-                    new_title = to_titlecase(title)
-
-                    if new_title != title:
-                        bib_database.entries[i]["title"] = new_title
-                        logger.info(f"[INFO] Using custom titlecasing: {new_title}")
+                title = protect_titlecase(title)
+                bib_database.entries[i]["title"] = title
+                logging.info(f"[KEEP] {log_title(title)}")
 
     new_entries_cnt = len(bib_database.entries)
     assert orig_entries_cnt == new_entries_cnt
@@ -222,22 +283,24 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
         bwriter = bibtexparser.bwriter.BibTexWriter()
         bwriter.order_entries_by = None
         bibtex_str = bibtexparser.dump(bib_database, f, writer=bwriter)
-        logger.info(f"[FINISHED] Saving the results to {out_file}.")
+        logger.info(f"[FINISH] Saving the results to {out_file}.")
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", type=str, help="Bibliography file")
     parser.add_argument("-o", "--out", type=str, default=None, help="Output file")
-    parser.add_argument("-a", "--replace_arxiv", action="store_true", help="")
-    parser.add_argument("-t", "--force_titlecase", action="store_true", help="Use `titlecase` to fix titlecasing for references not found on DBLP")
+    parser.add_argument("-a", "--replace_arxiv", action="store_true",
+        help="Try to use a non-arXiv version whenever possible")
+    parser.add_argument("-t", "--force_titlecase", action="store_true",
+        help="Use the `titlecase` package to fix titlecasing for paper names which are not titlecased")
     parser.add_argument("-i", "--interact", action="store_true", help="Interactive mode - confirm every change")
 
     args = parser.parse_args()
     logger.info(args)
 
     if args.out is None:
-        out_file = args.in_file + ".fixed"
+        out_file = args.in_file.replace(".bib", "") + ".fixed.bib"
     else:
         out_file = args.out
 
