@@ -20,6 +20,7 @@ The package uses a conservative approach:
 
 import os
 import argparse
+from collections import namedtuple
 import logging
 import requests
 import bibtexparser
@@ -170,9 +171,68 @@ def fix_reflabel(entry, orig_entry):
     entry["ID"] = orig_entry["ID"]
     return entry
 
+DATE_REGEX = (r'([1-3]?[0-9](?:st|rd|nd|th)?((?: *[-–] *)[1-3]?[0-9](?:st|rd|nd|th)?)?) '
+              + '+(january|february|march|april|may|june|july|august|september|october|november|december|'
+              + 'jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec),? +[12][90][0-9]{2}')
+PLACE_LIST = ['Copenhagen', 'Groningen', 'Heraklion', 'Hersonissos',
+              'Online Event', 'Online',
+              'Pisa', 'Punta Cana', 'Santa Fe', 'Schloss Dagstuhl', 'Tilburg University',
+              'Virtual Event',]
+SUFFIX_REGEX = r'(?:(?:volume|and|long|demo|demonstration|short|papers|selected|proceedings|part| [0-9]|[IVX]{1,4}|[,;:\(\)]) *)+$',
 
-def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
+def process_conf_location(entry, nlp):
+    """Process conference location & date -- remove date, put location into address."""
+    entry = entry.copy()
+    if 'booktitle' not in entry:
+        return entry
+    proc_title = entry['booktitle'].replace('\n', ' ')
+    proc_suffix = re.search(SUFFIX_REGEX, proc_title, re.I)
+    if proc_suffix:
+        proc_title = proc_title[:proc_suffix.start()].rstrip(',; ')
+        proc_suffix = proc_suffix.group(0)
+    else:
+        proc_suffix = ''
+    annot = nlp(proc_title)
+    # taking entities from NER
+    ents = list(annot.ents)
+    # adding dates not catched by NER
+    ents.extend([namedtuple('found', ['label_', 'start_char', 'end_char'])('DATE', m.start(), m.end())
+                   for m in re.finditer(DATE_REGEX, proc_title, re.I)])
+    # adding places not catched by NER
+    ents.extend([namedtuple('found', ['label_', 'start_char', 'end_char'])('GPE', m.start(), m.end())
+                   for m in re.finditer(r'\b(' + '|'.join(PLACE_LIST) + r')\b', proc_title, re.I)])
+    # removing numbers (not to confuse with dates)
+    ents = [ent for ent in ents if ent.label_ not in ['ORDINAL', 'CARDINAL']]
+    # sorting by position
+    ents.sort(key=lambda ent: ent.start_char)
+    # starting search
+    # proceedings name typically ends with the location and the date in DBLP
+    dates = []
+    gpes = []
+    # look for dates first
+    while (ents and ents[-1].label_ == 'DATE' and
+           (not dates or ents[-1].end_char + 3 >= dates[0].start_char)):
+        dates.insert(0, ents.pop())
+    # then look for location
+    while (ents and ents[-1].label_ == 'GPE' and
+           (not gpes or gpes[-1].end_char + 3 >= gpes[0].start_char)):
+        gpes.insert(0, ents.pop())
+    logger.debug('\nORIG:' + entry['booktitle'].replace('\n', ' ') + '\nSHRT:' + proc_title + '\nGPES: ' + str(gpes) + '\nDTES: ' + str(dates))
+    if gpes:  # location found -- move to address
+        entry['address'] = proc_title[gpes[0].start_char:gpes[-1].end_char]
+        entry['booktitle'] = proc_title[:gpes[0].start_char].rstrip(',; ') + proc_suffix
+    elif dates:  # date found -- just strip
+        entry['booktitle'] = proc_title[:dates[0].start_char].rstrip(',; ') + proc_suffix
+    # TODO case where date precedes the place
+    return entry
+
+
+def main(in_file, out_file, replace_arxiv, force_titlecase, interact, no_publisher, process_conf_loc):
     bp = BibTexParser(interpolate_strings=False, common_strings=True)
+
+    if args.process_conf_loc:
+        import spacy
+        nlp = spacy.load('en_core_web_sm')
 
     with open(in_file) as bibtex_file:
         bib_database = bibtexparser.load(bibtex_file, parser=bp)
@@ -188,6 +248,9 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
             if entry:
                 entry = fix_reflabel(entry, orig_entry)
                 entry["title"] = protect_titlecase(entry["title"])
+
+                if process_conf_loc and entry.get('ENTRYTYPE') == 'inproceedings':
+                    entry = process_conf_location(entry, nlp)
 
                 orig_str = pprint.pformat(orig_entry, indent=4)
                 new_str = pprint.pformat(entry, indent=4)
@@ -207,13 +270,18 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
                     bib_database.entries[i] = entry
             else:
                 logging.info(f"[KEEP] No result found, keeping the original entry: {title}")
+                entry = bib_database.entries[i]
 
                 if force_titlecase:
                     new_title = to_titlecase(title)
 
                     if new_title != title:
-                        bib_database.entries[i]["title"] = new_title
+                        entry["title"] = new_title
                         logger.info(f"[INFO] Using custom titlecasing: {new_title}")
+
+            if no_publisher and entry.get('ENTRYTYPE') in ['article', 'inproceedings'] and 'publisher' in entry:
+                del entry['publisher']
+
 
     new_entries_cnt = len(bib_database.entries)
     assert orig_entries_cnt == new_entries_cnt
@@ -232,6 +300,10 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--replace_arxiv", action="store_true", help="")
     parser.add_argument("-t", "--force_titlecase", action="store_true", help="Use `titlecase` to fix titlecasing for references not found on DBLP")
     parser.add_argument("-i", "--interact", action="store_true", help="Interactive mode - confirm every change")
+    parser.add_argument("--publisher", action=argparse.BooleanOptionalAction, default=True,
+                        help="Use --no-publisher to suppress publishers in conference papers and journals (still kept for books)")
+    parser.add_argument("--process-conf-loc", action="store_true",
+                        help="Parse conference dates and locations, remove from proceedings names, store locations under address")
 
     args = parser.parse_args()
     logger.info(args)
@@ -249,5 +321,7 @@ if __name__ == '__main__':
         out_file=out_file,
         replace_arxiv=args.replace_arxiv,
         force_titlecase=args.force_titlecase,
-        interact=args.interact
+        interact=args.interact,
+        no_publisher=not args.publisher,
+        process_conf_loc=args.process_conf_loc
     )
