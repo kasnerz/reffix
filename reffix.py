@@ -82,7 +82,7 @@ def is_equivalent(entry, orig_entry):
         return True
 
     # venue of one of the entries matches or is a substring of the other entry
-    venue_match = ("booktitle" in entry and "booktitle" in orig_entry and 
+    venue_match = ("booktitle" in entry and "booktitle" in orig_entry and
             (entry["booktitle"] in orig_entry["booktitle"] or orig_entry["booktitle"] in entry["booktitle"]))
 
     if year_match and venue_match:
@@ -143,9 +143,10 @@ def log_title(title):
 
 
 def get_authors_canonical(entry):
-    try:    
-        # bc.author modifies the entry in place
-        entry_tmp = entry.copy()
+    try:
+        # bc.author modifies the entry in place -> copy
+        # we only need the author, so drop everything else
+        entry_tmp = {"author": entry["author"]}
         # removing what the parser cannot read
         entry_tmp["author"] = entry_tmp["author"]\
             .replace("and others", "")\
@@ -206,6 +207,9 @@ def select_entry(entries, orig_entry, replace_arxiv):
     else:
         entry = get_best_entry(matching_entries, orig_entry)
 
+    if entry and is_arxiv(entry) and not is_arxiv(orig_entry):
+        logger.info(f"[INFO] Will not replace a conference entry with arXiv: {orig_entry['title']}")
+        return None
     return entry
 
 
@@ -276,8 +280,11 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
     assert orig_entries_cnt == new_entries_cnt
 
     with open(out_file, "w") as f:
-        bibtex_str = bibtexparser.dump(bib_database, f)
+        bwriter = bibtexparser.bwriter.BibTexWriter()
+        bwriter.order_entries_by = None
+        bibtex_str = bibtexparser.dump(bib_database, f, writer=bwriter)
         logger.info(f"[FINISH] Saving the results to {out_file}.")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -285,7 +292,7 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--out", type=str, default=None, help="Output file")
     parser.add_argument("-a", "--replace_arxiv", action="store_true",
         help="Try to use a non-arXiv version whenever possible")
-    parser.add_argument("-t", "--force_titlecase", action="store_true", 
+    parser.add_argument("-t", "--force_titlecase", action="store_true",
         help="Use the `titlecase` package to fix titlecasing for paper names which are not titlecased")
     parser.add_argument("-i", "--interact", action="store_true", help="Interactive mode - confirm every change")
 
