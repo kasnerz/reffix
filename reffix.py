@@ -178,7 +178,7 @@ PLACE_LIST = ['Copenhagen', 'Groningen', 'Heraklion', 'Hersonissos',
               'Online Event', 'Online',
               'Pisa', 'Punta Cana', 'Santa Fe', 'Schloss Dagstuhl', 'Tilburg University',
               'Virtual Event',]
-SUFFIX_REGEX = r'(?:(?:volume|and|long|demo|demonstration|short|papers|selected|proceedings|part| [0-9]|[IVX]{1,4}|[,;:\(\)]) *)+$',
+SUFFIX_REGEX = r'(?:(?:volume|and|long|demo|demonstration|short|papers|selected|proceedings|part| [0-9]|[IVX]{1,4}|[,;:\(\)]) *)+$'
 
 def process_conf_location(entry, nlp):
     """Process conference location & date -- remove date, put location into address."""
