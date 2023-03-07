@@ -60,10 +60,31 @@ def protect_titlecase(title):
     words = []
 
     for word in title.split():
-        if word[0].isupper():
-            words.append(r"{" + word + r"}")
-        else:
+        if word[0] == '{' and word[-1] == '}':
+            # already (presumably) protected
             words.append(word)
+        else:
+            protect = False
+            subwords = word.split('-')
+            for sw in subwords:
+                if len(subwords) > 1 and len(sw) == 1:
+                    # 3-D, U-Net
+                    protect = True
+                    break
+                if any(l.isupper() for l in sw[1:]):
+                    # Only considers capitals after the first letter
+                    # Mip-NeRF: protect
+                    # Spatially-Varying: don't protect
+                    protect = True
+                    break
+            if protect:
+                # leave the : out of the protection
+                if word[-1] == ':':
+                    words.append(r"{" + word[:-1] + r"}:")
+                else:
+                    words.append(r"{" + word + r"}")
+            else:
+                words.append(word)
 
     return " ".join(words)
 
