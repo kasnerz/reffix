@@ -231,7 +231,7 @@ def select_entry(entries, orig_entry, replace_arxiv):
         entry = get_best_entry(matching_entries, orig_entry)
 
     if entry and is_arxiv(entry) and not is_arxiv(orig_entry):
-        logger.info(colored(f"[KEEP] Can be replaced with arXiv: {orig_entry['title']}", "grey", attrs=["bold"]))
+        logger.info(colored(f"[KEEP][NON_ARXIV_FOUND]: {log_title(orig_entry['title'])}", "grey", attrs=["bold"]))
         return None
     return entry
 
@@ -242,7 +242,7 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entr
 
     with open(in_file) as bibtex_file:
         bib_database = bibtexparser.load(bibtex_file, parser=bp)
-        logger.info(colored(colored("[INFO] Bibliography file loaded successfully.", "cyan"), "cyan"))
+        logger.info(colored("[INFO] Bibliography file loaded successfully.", "cyan"))
         orig_entries_cnt = len(bib_database.entries)
 
         for i in range(len(bib_database.entries)):
