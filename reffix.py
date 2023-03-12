@@ -27,13 +27,15 @@ import titlecase
 import re
 import pprint
 import unidecode
+import coloredlogs
 
 from bibtexparser.bparser import BibTexParser
 import bibtexparser.customization as bc
+from termcolor import colored
 
-
-logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO, datefmt="%H:%M:%S")
+logging.basicConfig(format="%(message)s", level=logging.INFO, datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
+
 
 dblp_api = "https://dblp.org/search/publ/api"
 
@@ -59,12 +61,12 @@ def protect_titlecase(title):
     words = []
 
     for word in title.split():
-        if word[0] == '{' and word[-1] == '}':
+        if word[0] == "{" and word[-1] == "}":
             # already (presumably) protected
             words.append(word)
         else:
             protect = False
-            subwords = word.split('-')
+            subwords = word.split("-")
             for sw in subwords:
                 if len(subwords) > 1 and len(sw) == 1:
                     # 3-D, U-Net
@@ -78,7 +80,7 @@ def protect_titlecase(title):
                     break
             if protect:
                 # leave the : out of the protection
-                if word[-1] == ':':
+                if word[-1] == ":":
                     words.append(r"{" + word[:-1] + r"}:")
                 else:
                     words.append(r"{" + word + r"}")
@@ -182,10 +184,10 @@ def get_authors_canonical(entry):
         authors = [bc.splitname(a, strict_mode=False) for a in authors]
         authors = [" ".join(a["first"]) + " " + " ".join(a["last"]) for a in authors]
     except (bc.InvalidName, TypeError) as x:
-        logger.warning(f"[WARNING] Cannot parse authors: {entry_tmp['author']}")
+        logger.warning(colored(f"[WARNING] Cannot parse authors: {entry_tmp['author']}", "yellow"))
         return []
     except KeyError:
-        logger.warning(f"[WARNING] No authors found: {entry['title']}")
+        logger.warning(colored(f"[WARNING] No authors found: {entry['title']}", "yellow"))
         return []
     except Exception as e:
         logger.exception(e)
@@ -229,7 +231,7 @@ def select_entry(entries, orig_entry, replace_arxiv):
         entry = get_best_entry(matching_entries, orig_entry)
 
     if entry and is_arxiv(entry) and not is_arxiv(orig_entry):
-        logger.info(f"[INFO] Will not replace a conference entry with arXiv: {orig_entry['title']}")
+        logger.info(colored(f"[KEEP] Can be replaced with arXiv: {orig_entry['title']}", "grey", attrs=["bold"]))
         return None
     return entry
 
@@ -240,7 +242,7 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entr
 
     with open(in_file) as bibtex_file:
         bib_database = bibtexparser.load(bibtex_file, parser=bp)
-        logger.info("[INFO] Bibliography file loaded successfully.")
+        logger.info(colored(colored("[INFO] Bibliography file loaded successfully.", "cyan"), "cyan"))
         orig_entries_cnt = len(bib_database.entries)
 
         for i in range(len(bib_database.entries)):
@@ -281,13 +283,13 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entr
 
                     if is_equivalent(entry, orig_entry):
                         # the entry is equivalent, using the DBLP bib entry
-                        logging.info(f"[UPDATE] {log_title(entry['title'])}")
+                        logging.info(colored(f"[UPDATE] {log_title(entry['title'])}", "green"))
                     elif replace_arxiv and is_arxiv(orig_entry) and not is_arxiv(entry):
                         # non-arxiv version was found on DBLP
-                        logging.info(f"[UPDATE_ARXIV] {log_title(entry['title'])}")
+                        logging.info(colored(f"[UPDATE_ARXIV] {log_title(entry['title'])}", "green", attrs=["bold"]))
                     else:
                         # a different version was found on DBLP
-                        logging.info(f"[UPDATE] {log_title(entry['title'])}")
+                        logging.info(colored(f"[UPDATE] {log_title(entry['title'])}", "green"))
 
             else:
                 # no result found, keeping the original entry
@@ -296,7 +298,7 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entr
 
                 title = protect_titlecase(title)
                 bib_database.entries[i]["title"] = title
-                logging.info(f"[KEEP] {log_title(title)}")
+                logging.info(colored(f"[KEEP] {log_title(title)}", "grey"))
 
     new_entries_cnt = len(bib_database.entries)
     assert orig_entries_cnt == new_entries_cnt
