@@ -1,18 +1,18 @@
-# reffix: Fixing BibTeX reference list with DBLP API :wrench:
+# reffix: Fixing BibTeX reference list with DBLP API 🔧
 
-:arrow_right: *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs, or using arXiv pre-prints instead of published version.
+➡️ *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs, or using arXiv pre-prints instead of published version.
 
-:arrow_right: *Reffix* queries the **[DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)**, so it does not require any local database of papers.
+➡️ *Reffix* queries the **[DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)**, so it does not require any local database of papers.
 
-:arrow_right: *Reffix* uses a conservative approach to keep your bibliography valid. 
+➡️ *Reffix* uses a conservative approach to keep your bibliography valid. 
 
-:arrow_right: The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references containing computer science papers present on [DBLP](https://dblp.org).
+➡️ The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references containing computer science papers present on [DBLP](https://dblp.org).
 
 ## Example
 **Before the update (Google Scholar):** 
-- :negative_squared_cross_mark: arXiv version 
-- :negative_squared_cross_mark: no URL 
-- :negative_squared_cross_mark: capitalization lost
+- ❎ arXiv version 
+- ❎ no URL 
+- ❎ capitalization lost
 ```
  {  
     'ENTRYTYPE': 'article',
@@ -26,9 +26,9 @@
 
 ```
 **After the update (DBLP + preserving capitalization):**
-- :heavy_check_mark: ACL version
-- :heavy_check_mark: URL included
-- :heavy_check_mark: capitalization preserved 
+- ✔️ ACL version
+- ✔️ URL included
+- ✔️ capitalization preserved 
 ```
  {   
     'ENTRYTYPE': 'inproceedings',
