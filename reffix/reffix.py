@@ -27,7 +27,6 @@ import titlecase
 import re
 import pprint
 import unidecode
-import coloredlogs
 
 from bibtexparser.bparser import BibTexParser
 import bibtexparser.customization as bc
@@ -35,7 +34,6 @@ from termcolor import colored
 
 logging.basicConfig(format="%(message)s", level=logging.INFO, datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
-
 
 dblp_api = "https://dblp.org/search/publ/api"
 
@@ -236,8 +234,7 @@ def select_entry(entries, orig_entry, replace_arxiv):
     return entry
 
 
-def main(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entries_by=None):
-
+def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entries_by=None):
     bp = BibTexParser(interpolate_strings=False, common_strings=True)
 
     with open(in_file) as bibtex_file:
@@ -308,10 +305,10 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entr
         bwriter.order_entries_by = order_entries_by
 
         bibtexparser.dump(bib_database, f, writer=bwriter)
-        logger.info(f"[FINISH] Saving the results to {out_file}.")
+        logger.info(colored(f"[FINISH] Saving the results to {out_file}.", "cyan"))
 
 
-if __name__ == "__main__":
+def cli():
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", type=str, help="Bibliography file")
     parser.add_argument("-o", "--out", type=str, default=None, help="Output file")
@@ -354,7 +351,7 @@ if __name__ == "__main__":
     out_dir = os.path.dirname(out_file) if os.path.dirname(out_file) else "."
     os.makedirs(out_dir, exist_ok=True)
 
-    main(
+    process(
         in_file=args.in_file,
         out_file=out_file,
         replace_arxiv=args.replace_arxiv,
@@ -362,3 +359,7 @@ if __name__ == "__main__":
         interact=args.interact,
         order_entries_by=args.sort_by,
     )
+
+
+if __name__ == "__main__":
+    cli()

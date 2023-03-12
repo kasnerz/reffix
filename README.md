@@ -1,18 +1,28 @@
-# reffix: Fixing BibTeX reference list with DBLP API :wrench:
+# reffix: Fixing BibTeX reference list with DBLP API 🔧
 
-:arrow_right: *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs, or using arXiv pre-prints instead of published version.
+➡️ *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs, or using arXiv pre-prints instead of published version.
 
-:arrow_right: *Reffix* queries the **[DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)**, so it does not require any local database of papers.
+➡️ *Reffix* queries the **[DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)**, so it does not require any local database of papers.
 
-:arrow_right: *Reffix* uses a conservative approach to keep your bibliography valid. 
+➡️ *Reffix* uses a conservative approach to keep your bibliography valid. 
 
-:arrow_right: The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references containing computer science papers present on [DBLP](https://dblp.org).
+➡️ The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references containing computer science papers present on [DBLP](https://dblp.org).
+
+## Quickstart
+
+👉️ You can now install `reffix` from [PyPI](https://pypi.org/project/reffix/):
+```
+pip install -U reffix
+reffix [BIB_FILE]
+```
+
+See the Installation and Usage section below for more details.
 
 ## Example
 **Before the update (Google Scholar):** 
-- :negative_squared_cross_mark: arXiv version 
-- :negative_squared_cross_mark: no URL 
-- :negative_squared_cross_mark: capitalization lost
+- ❎ arXiv version 
+- ❎ no URL 
+- ❎ capitalization lost
 ```
  {  
     'ENTRYTYPE': 'article',
@@ -26,9 +36,9 @@
 
 ```
 **After the update (DBLP + preserving capitalization):**
-- :heavy_check_mark: ACL version
-- :heavy_check_mark: URL included
-- :heavy_check_mark: capitalization preserved 
+- ✔️ ACL version
+- ✔️ URL included
+- ✔️ capitalization preserved 
 ```
  {   
     'ENTRYTYPE': 'inproceedings',
@@ -68,21 +78,27 @@
 The package uses [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) for parsing the BibTex files, [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html) for updating the references, and the [titlecase](https://github.com/ppannuto/python-titlecase) package for optional extra titlecasing.
 
 
-## Usage
+## Installation
 
-1. Clone the repository and install the requirements:
+You can install `reffix` from [PyPI](https://pypi.org/project/reffix/):
 ```
-git clone https://github.com/kasnerz/reffix.git
-cd reffix
-pip install -r requirements.txt
+pip install reffix
 ```
-2. Run the script with the .bib file as the first argument:
+
+For development, you can install the package in the editable mode:
 ```
-./reffix.py path/to/bibtex_file.bib
+pip install -e .
 ```
-Or with all the features enabled:
+## Usage
+Run the script with the .bib file as the first argument:
 ```
-./reffix.py path/to/bibtex_file.bib -iat -o path/to/output_file.bib
+reffix [IN_BIB_FILE]
+```
+By default, the program will run in batch mode, save the outputs in the file with an extra ".fixed" suffix, and keep the arXiv versions.
+
+The following command will run reffix in interactive mode, save the outputs to a custom file, and replace arXiv versions:
+```
+reffix [IN_BIB_FILE] -o [OUT_BIB_FILE] -i -a
 ```
 ### Flags
 | short | long                | description                                                                                                                                                                                                                                                                                                                                                                                                        |
