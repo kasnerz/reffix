@@ -32,9 +32,7 @@ from bibtexparser.bparser import BibTexParser
 import bibtexparser.customization as bc
 
 
-logging.basicConfig(
-    format="%(asctime)s - %(message)s", level=logging.INFO, datefmt="%H:%M:%S"
-)
+logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO, datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
 
 dblp_api = "https://dblp.org/search/publ/api"
@@ -76,14 +74,8 @@ def to_titlecase(title):
 
 def is_equivalent(entry, orig_entry):
     # a bit more bulletproof (because of variability in the names of venues): year and pages match
-    year_match = (
-        "year" in entry and "year" in orig_entry and entry["year"] == orig_entry["year"]
-    )
-    pages_match = (
-        "pages" in entry
-        and "pages" in orig_entry
-        and entry["pages"] == orig_entry["pages"]
-    )
+    year_match = "year" in entry and "year" in orig_entry and entry["year"] == orig_entry["year"]
+    pages_match = "pages" in entry and "pages" in orig_entry and entry["pages"] == orig_entry["pages"]
 
     if year_match and pages_match:
         return True
@@ -92,10 +84,7 @@ def is_equivalent(entry, orig_entry):
     venue_match = (
         "booktitle" in entry
         and "booktitle" in orig_entry
-        and (
-            entry["booktitle"] in orig_entry["booktitle"]
-            or orig_entry["booktitle"] in entry["booktitle"]
-        )
+        and (entry["booktitle"] in orig_entry["booktitle"] or orig_entry["booktitle"] in entry["booktitle"])
     )
 
     if year_match and venue_match:
@@ -161,9 +150,7 @@ def get_authors_canonical(entry):
         # we only need the author, so drop everything else
         entry_tmp = {"author": entry["author"]}
         # removing what the parser cannot read
-        entry_tmp["author"] = (
-            entry_tmp["author"].replace("and others", "").replace("~", " ")
-        )
+        entry_tmp["author"] = entry_tmp["author"].replace("and others", "").replace("~", " ")
 
         # convert the string with author names to list
         entry_tmp = bc.author(entry_tmp)
@@ -205,10 +192,7 @@ def select_entry(entries, orig_entry, replace_arxiv):
         authors = get_authors_canonical(entry)
 
         # keep only entries where at least one of the authors is also present in the original entry
-        if (
-            title == orig_title
-            and len(set(orig_authors).intersection(set(authors))) > 0
-        ):
+        if title == orig_title and len(set(orig_authors).intersection(set(authors))) > 0:
             matching_entries.append(entry)
 
     if replace_arxiv:
@@ -224,16 +208,12 @@ def select_entry(entries, orig_entry, replace_arxiv):
         entry = get_best_entry(matching_entries, orig_entry)
 
     if entry and is_arxiv(entry) and not is_arxiv(orig_entry):
-        logger.info(
-            f"[INFO] Will not replace a conference entry with arXiv: {orig_entry['title']}"
-        )
+        logger.info(f"[INFO] Will not replace a conference entry with arXiv: {orig_entry['title']}")
         return None
     return entry
 
 
-def main(
-    in_file, out_file, replace_arxiv, force_titlecase, interact, order_entries_by=None
-):
+def main(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entries_by=None):
 
     bp = BibTexParser(interpolate_strings=False, common_strings=True)
 
@@ -252,9 +232,7 @@ def main(
 
             query = title + " " + first_author
             entries = get_dblp_results(query)
-            entry = select_entry(
-                entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv
-            )
+            entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)
 
             if entry is not None:
                 # replace the new BibTeX reference label with the original one
@@ -270,12 +248,8 @@ def main(
                 conf = "y"
 
                 if interact:
-                    logging.info(
-                        f"\n---------------- Original ----------------\n {orig_str}\n"
-                    )
-                    logging.info(
-                        f"\n---------------- Retrieved ---------------\n {new_str}\n"
-                    )
+                    logging.info(f"\n---------------- Original ----------------\n {orig_str}\n")
+                    logging.info(f"\n---------------- Retrieved ---------------\n {new_str}\n")
                     while True:
                         conf = input("==> Replace the entry (y/n)?: ").lower()
                         if conf == "y" or conf == "n":
@@ -309,7 +283,8 @@ def main(
     with open(out_file, "w") as f:
         bwriter = bibtexparser.bwriter.BibTexWriter()
         bwriter.order_entries_by = order_entries_by
-        bibtex_str = bibtexparser.dump(bib_database, f, writer=bwriter)
+
+        bibtexparser.dump(bib_database, f, writer=bwriter)
         logger.info(f"[FINISH] Saving the results to {out_file}.")
 
 
@@ -339,10 +314,10 @@ if __name__ == "__main__":
         "-s",
         "--sort_by",
         default=None,
-        # nargs='?',  is it needed?
-        choices=[None, "ENTRYTYPE_author_year", "year_author"],
-        help="The default None value keeps the original order of Bib entries. "
-        "Multiple sort conditions must be separated by underscore and compatible with bibtexparser.BibTexWriter.",
+        nargs="*",
+        help="Multiple sort conditions compatible with bibtexparser.BibTexWriter applied in the provided order. "
+        "Example: `-s ENTRYTYPE year` sorts the list by the entry type as its primary key and year as its secondary key. "
+        "`ID` can be used to refer to the Bibtex key. The default None value keeps the original order of Bib entries. ",
     )
 
     args = parser.parse_args()
@@ -356,14 +331,11 @@ if __name__ == "__main__":
     out_dir = os.path.dirname(out_file) if os.path.dirname(out_file) else "."
     os.makedirs(out_dir, exist_ok=True)
 
-    sort_by = args.sort_by
-    sort_by = sort_by if sort_by is None else sort_by.split("_")
-
     main(
         in_file=args.in_file,
         out_file=out_file,
         replace_arxiv=args.replace_arxiv,
         force_titlecase=args.force_titlecase,
         interact=args.interact,
-        order_entries_by=sort_by,
+        order_entries_by=args.sort_by,
     )
