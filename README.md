@@ -1,5 +1,13 @@
 # reffix: Fixing BibTeX reference list with DBLP API 🔧
 
+[![reffix](https://github.com/kasnerz/reffix/actions/workflows/python-package.yml/badge.svg)](https://github.com/kasnerz/reffix/actions/workflows/python-package.yml)
+![GitHub](https://img.shields.io/github/license/kasnerz/reffix)
+![GitHub issues](https://img.shields.io/github/issues/kasnerz/reffix)
+![PyPI](https://img.shields.io/pypi/v/reffix)
+![PyPI downloads](https://img.shields.io/pypi/dm/reffix)
+![Github stars](https://img.shields.io/github/stars/kasnerz/reffix?style=social)
+
+
 ➡️ *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs, or using arXiv pre-prints instead of published version.
 
 ➡️ *Reffix* queries the **[DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)**, so it does not require any local database of papers.
