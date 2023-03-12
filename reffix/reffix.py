@@ -149,7 +149,8 @@ def is_arxiv(entry):
     journal = entry.get("journal", "").lower()
     eprinttype = entry.get("eprinttype", "").lower()
     url = entry.get("url", "").lower()
-    return "arxiv" in journal + eprinttype + url
+
+    return ("arxiv" in journal + eprinttype + url) or "corr" in journal
 
 
 def is_titlecased(title):
@@ -255,6 +256,7 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
                 first_author = ""
 
             query = title + " " + first_author
+
             entries = get_dblp_results(query)
             entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)
 
