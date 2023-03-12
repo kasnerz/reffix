@@ -59,31 +59,35 @@ def protect_titlecase(title):
     words = []
 
     for word in title.split():
-        if word[0] == "{" and word[-1] == "}":
+        if "{" in word:
             # already (presumably) protected
             words.append(word)
-        else:
-            protect = False
+            continue
+
+        letters = []
+
+        for i, letter in enumerate(word):
+            # protect individual capital letters
+            protect = True
             subwords = word.split("-")
-            for sw in subwords:
-                if len(subwords) > 1 and len(sw) == 1:
-                    # 3-D, U-Net
-                    protect = True
-                    break
-                if any(l.isupper() for l in sw[1:]):
-                    # Only considers capitals after the first letter
-                    # Mip-NeRF: protect
-                    # Spatially-Varying: don't protect
-                    protect = True
-                    break
-            if protect:
-                # leave the : out of the protection
-                if word[-1] == ":":
-                    words.append(r"{" + word[:-1] + r"}:")
-                else:
-                    words.append(r"{" + word + r"}")
+
+            if (
+                len(subwords) > 1
+                and len(subwords[0]) > 1
+                and i > 0
+                and word[i - 1] == "-"
+                and all(l.islower() for l in word[i + 1 :])
+            ):
+                # 3-D, U-Net, Mip-NeRF: protect
+                # Spatially-Varying: don't protect
+                protect = False
+
+            if letter.isupper() and protect:
+                letters.append(r"{" + letter + r"}")
             else:
-                words.append(word)
+                letters.append(letter)
+
+        words.append("".join(letters))
 
     return " ".join(words)
 
@@ -145,7 +149,8 @@ def is_arxiv(entry):
     journal = entry.get("journal", "").lower()
     eprinttype = entry.get("eprinttype", "").lower()
     url = entry.get("url", "").lower()
-    return "arxiv" in journal + eprinttype + url
+
+    return ("arxiv" in journal + eprinttype + url) or "corr" in journal
 
 
 def is_titlecased(title):
@@ -251,6 +256,7 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
                 first_author = ""
 
             query = title + " " + first_author
+
             entries = get_dblp_results(query)
             entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)
 

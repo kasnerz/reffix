@@ -95,7 +95,7 @@ pip install reffix
 
 For development, you can install the package in the editable mode:
 ```
-pip install -e .
+pip install -e .[dev]
 ```
 ## Usage
 Run the script with the .bib file as the first argument:
