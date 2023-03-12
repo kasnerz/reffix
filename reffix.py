@@ -32,16 +32,14 @@ from bibtexparser.bparser import BibTexParser
 import bibtexparser.customization as bc
 
 
-logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO, datefmt='%H:%M:%S')
+logging.basicConfig(format="%(asctime)s - %(message)s", level=logging.INFO, datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
 
 dblp_api = "https://dblp.org/search/publ/api"
 
+
 def get_dblp_results(query):
-    params = {
-        "format" : "bib",
-        "q" : query
-    }
+    params = {"format": "bib", "q": query}
     res = requests.get(dblp_api, params=params)
     try:
         if res.status_code == 200:
@@ -53,6 +51,7 @@ def get_dblp_results(query):
     except Exception as e:
         logger.exception(e)
         raise e
+
 
 def protect_titlecase(title):
     # wrap the capital letters in curly braces to protect them
@@ -96,15 +95,18 @@ def to_titlecase(title):
 
 def is_equivalent(entry, orig_entry):
     # a bit more bulletproof (because of variability in the names of venues): year and pages match
-    year_match = ("year" in entry and "year" in orig_entry and entry["year"] == orig_entry["year"])
-    pages_match = ("pages" in entry and "pages" in orig_entry and entry["pages"] == orig_entry["pages"])
+    year_match = "year" in entry and "year" in orig_entry and entry["year"] == orig_entry["year"]
+    pages_match = "pages" in entry and "pages" in orig_entry and entry["pages"] == orig_entry["pages"]
 
     if year_match and pages_match:
         return True
 
     # venue of one of the entries matches or is a substring of the other entry
-    venue_match = ("booktitle" in entry and "booktitle" in orig_entry and
-            (entry["booktitle"] in orig_entry["booktitle"] or orig_entry["booktitle"] in entry["booktitle"]))
+    venue_match = (
+        "booktitle" in entry
+        and "booktitle" in orig_entry
+        and (entry["booktitle"] in orig_entry["booktitle"] or orig_entry["booktitle"] in entry["booktitle"])
+    )
 
     if year_match and venue_match:
         return True
@@ -169,9 +171,7 @@ def get_authors_canonical(entry):
         # we only need the author, so drop everything else
         entry_tmp = {"author": entry["author"]}
         # removing what the parser cannot read
-        entry_tmp["author"] = entry_tmp["author"]\
-            .replace("and others", "")\
-            .replace("~", " ")
+        entry_tmp["author"] = entry_tmp["author"].replace("and others", "").replace("~", " ")
 
         # convert the string with author names to list
         entry_tmp = bc.author(entry_tmp)
@@ -234,7 +234,8 @@ def select_entry(entries, orig_entry, replace_arxiv):
     return entry
 
 
-def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
+def main(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entries_by=None):
+
     bp = BibTexParser(interpolate_strings=False, common_strings=True)
 
     with open(in_file) as bibtex_file:
@@ -302,20 +303,43 @@ def main(in_file, out_file, replace_arxiv, force_titlecase, interact):
 
     with open(out_file, "w") as f:
         bwriter = bibtexparser.bwriter.BibTexWriter()
-        bwriter.order_entries_by = None
-        bibtex_str = bibtexparser.dump(bib_database, f, writer=bwriter)
+        bwriter.order_entries_by = order_entries_by
+
+        bibtexparser.dump(bib_database, f, writer=bwriter)
         logger.info(f"[FINISH] Saving the results to {out_file}.")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("in_file", type=str, help="Bibliography file")
     parser.add_argument("-o", "--out", type=str, default=None, help="Output file")
-    parser.add_argument("-a", "--replace_arxiv", action="store_true",
-        help="Try to use a non-arXiv version whenever possible")
-    parser.add_argument("-t", "--force_titlecase", action="store_true",
-        help="Use the `titlecase` package to fix titlecasing for paper names which are not titlecased")
-    parser.add_argument("-i", "--interact", action="store_true", help="Interactive mode - confirm every change")
+    parser.add_argument(
+        "-a",
+        "--replace_arxiv",
+        action="store_true",
+        help="Try to use a non-arXiv version whenever possible",
+    )
+    parser.add_argument(
+        "-t",
+        "--force_titlecase",
+        action="store_true",
+        help="Use the `titlecase` package to fix titlecasing for paper names which are not titlecased",
+    )
+    parser.add_argument(
+        "-i",
+        "--interact",
+        action="store_true",
+        help="Interactive mode - confirm every change",
+    )
+    parser.add_argument(
+        "-s",
+        "--sort_by",
+        default=None,
+        nargs="*",
+        help="Multiple sort conditions compatible with bibtexparser.BibTexWriter applied in the provided order. "
+        "Example: `-s ENTRYTYPE year` sorts the list by the entry type as its primary key and year as its secondary key. "
+        "`ID` can be used to refer to the Bibtex key. The default None value keeps the original order of Bib entries. ",
+    )
 
     args = parser.parse_args()
     logger.info(args)
@@ -325,7 +349,7 @@ if __name__ == '__main__':
     else:
         out_file = args.out
 
-    out_dir = os.path.dirname(out_file) if os.path.dirname(out_file) else '.'
+    out_dir = os.path.dirname(out_file) if os.path.dirname(out_file) else "."
     os.makedirs(out_dir, exist_ok=True)
 
     main(
@@ -333,5 +357,6 @@ if __name__ == '__main__':
         out_file=out_file,
         replace_arxiv=args.replace_arxiv,
         force_titlecase=args.force_titlecase,
-        interact=args.interact
+        interact=args.interact,
+        order_entries_by=args.sort_by,
     )
