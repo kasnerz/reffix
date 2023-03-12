@@ -305,7 +305,7 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
         bwriter.order_entries_by = order_entries_by
 
         bibtexparser.dump(bib_database, f, writer=bwriter)
-        logger.info(f"[FINISH] Saving the results to {out_file}.")
+        logger.info(colored(f"[FINISH] Saving the results to {out_file}.", "cyan"))
 
 
 def cli():
