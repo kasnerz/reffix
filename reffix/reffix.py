@@ -238,7 +238,7 @@ def select_entry(entries, orig_entry, replace_arxiv):
         entry = get_best_entry(matching_entries, orig_entry)
 
     if entry and is_arxiv(entry) and not is_arxiv(orig_entry):
-        logger.info(colored(f"[KEEP][NON_ARXIV_FOUND]: {log_title(orig_entry['title'])}", "grey", attrs=["bold"]))
+        logger.info(colored(f"[KEEP][NON_ARXIV_FOUND]: {log_title(orig_entry['title'])}", "light_grey", attrs=["bold"]))
         return None
     return entry
 
@@ -305,7 +305,7 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
 
                 title = protect_titlecase(title)
                 bib_database.entries[i]["title"] = title
-                logging.info(colored(f"[KEEP] {log_title(title)}", "grey"))
+                logging.info(colored(f"[KEEP] {log_title(title)}", "light_grey"))
 
     new_entries_cnt = len(bib_database.entries)
     assert orig_entries_cnt == new_entries_cnt
