@@ -51,7 +51,7 @@ def get_dblp_results(query):
 
             return bib.entries
         else:
-            logger.error(colored(f"[ERROR] DBLP API returned status code {res.status_code}", "red"))
+            log_message(f"DBLP API returned status code {res.status_code}", "error", level=logging.ERROR)
             return None
     except Exception as e:
         logger.exception(e)
@@ -179,8 +179,28 @@ def is_titlecased(title):
         return nr_uppercased >= 3
 
 
-def log_title(title):
-    return title.replace("\n", " ").replace("{", "").replace("}", "")
+def entry_to_str(entry):
+    authors = get_authors_canonical(entry)
+    first_author_surname = authors[0].split(" ")[-1] if authors else None
+    year = entry.get("year", "")
+
+    s = []
+    if first_author_surname and year:
+        s.append(f"({first_author_surname}, {year})".ljust(20))
+
+    title = entry.get("title", "")
+    title = title.replace("\n", " ").replace("{", "").replace("}", "")
+
+    # shorten title to 100 characters, append ellipsis if necessary
+    title = title[:97] + "..." if len(title) > 100 else title
+    title = title.ljust(100)
+
+    s.append(f"{title}")
+    url = entry.get("url", None)
+    if url:
+        s.append(f"[{url}]")
+
+    return " ".join(s)
 
 
 def get_authors_canonical(entry):
@@ -200,10 +220,10 @@ def get_authors_canonical(entry):
         authors = [bc.splitname(a, strict_mode=False) for a in authors]
         authors = [" ".join(a["first"]) + " " + " ".join(a["last"]) for a in authors]
     except (bc.InvalidName, TypeError) as x:
-        logger.warning(colored(f"[WARNING] Cannot parse authors: {entry_tmp['author']}", "yellow"))
+        log_message(f"Cannot parse authors: {entry_tmp['author']}", "warning", level=logging.WARNING)
         return []
     except KeyError:
-        logger.warning(colored(f"[WARNING] No authors found: {entry['title']}", "yellow"))
+        log_message(f"No authors found: {entry['title']}", "warning", level=logging.WARNING)
         return []
     except Exception as e:
         logger.exception(e)
@@ -222,9 +242,11 @@ def select_entry(entries, orig_entry, replace_arxiv):
     orig_title = re.sub(r"[^0-9a-zA-Z]+", "", orig_entry["title"]).lower()
     orig_authors = get_authors_canonical(orig_entry)
 
+    # try to find if any entry is better than the original one
     for entry in entries:
         title = re.sub(r"[^0-9a-zA-Z]+", "", entry["title"]).lower()
 
+        # skip entries with no authors
         if "author" not in entry:
             continue
 
@@ -234,22 +256,46 @@ def select_entry(entries, orig_entry, replace_arxiv):
         if title == orig_title and len(set(orig_authors).intersection(set(authors))) > 0:
             matching_entries.append(entry)
 
+    # split into arxiv and non-arxiv publications
+    entries_other = [entry for entry in matching_entries if not is_arxiv(entry)]
+    entries_arxiv = [entry for entry in matching_entries if is_arxiv(entry)]
+
+    best_all = get_best_entry(matching_entries, orig_entry)
+    best_other = get_best_entry(entries_other, orig_entry)
+    best_arxiv = get_best_entry(entries_arxiv, orig_entry)
+
+    # we found a non-arxiv entry for an arxiv entry but not returning it because the flag was not set -> notify the user
+    if not replace_arxiv and is_arxiv(orig_entry) and best_other is not None:
+        log_message(entry_to_str(orig_entry), "non_arxiv_found")
+
+    # best entries can be None (if None is returned, no new entry was selected)
     if replace_arxiv:
-        # split into arxiv and non-arxiv publications
-        entries_other = [entry for entry in matching_entries if not is_arxiv(entry)]
-        entries_arxiv = [entry for entry in matching_entries if is_arxiv(entry)]
-
-        if entries_other:
-            entry = get_best_entry(entries_other, orig_entry)
-        else:
-            entry = get_best_entry(entries_arxiv, orig_entry)
+        return best_other or best_all
     else:
-        entry = get_best_entry(matching_entries, orig_entry)
+        return best_arxiv or best_all
 
-    if entry and is_arxiv(entry) and not is_arxiv(orig_entry):
-        logger.info(colored(f"[KEEP][NON_ARXIV_FOUND]: {log_title(orig_entry['title'])}", "light_grey", attrs=["bold"]))
-        return None
-    return entry
+
+def log_message(message, info, level=logging.INFO):
+    padding = 10
+
+    if info == "update":
+        info_str = colored(f"[UPDATE]".ljust(padding), "green", attrs=["bold"])
+    elif info == "update_arxiv":
+        info_str = colored(f"[UPD_ARX]".ljust(padding), "green", attrs=["bold"])
+    elif info == "non_arxiv_found":
+        info_str = colored(f"[KEEP_ARX]".ljust(padding), "light_grey", attrs=["bold"])
+    elif info == "keep":
+        info_str = colored(f"[KEEP]".ljust(padding), "light_grey", attrs=["bold"])
+    elif info == "error":
+        info_str = colored(f"[ERROR]".ljust(padding), "red", attrs=["bold"])
+    elif info == "warning":
+        info_str = colored(f"[WARNING]".ljust(padding), "yellow", attrs=["bold"])
+    elif info == "info":
+        info_str = colored(f"[INFO]".ljust(padding), "blue", attrs=["bold"])
+    else:
+        info_str = ""
+
+    logger.log(level=level, msg=f"{info_str} {message}")
 
 
 def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_entries_by=None):
@@ -257,7 +303,7 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
 
     with open(in_file) as bibtex_file:
         bib_database = bibtexparser.load(bibtex_file, parser=bp)
-        logger.info(colored("[INFO] Bibliography file loaded successfully.", "cyan"))
+        log_message("Bibliography file loaded successfully.", "info")
         orig_entries_cnt = len(bib_database.entries)
 
         for i in range(len(bib_database.entries)):
@@ -266,7 +312,8 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
             try:
                 first_author = get_authors_canonical(orig_entry)[0]
             except IndexError:
-                first_author = ""
+                # don't try to match if there is no first author
+                continue
 
             query = title + " " + first_author
 
@@ -299,13 +346,13 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
 
                     if is_equivalent(entry, orig_entry):
                         # the entry is equivalent, using the DBLP bib entry
-                        logging.info(colored(f"[UPDATE] {log_title(entry['title'])}", "green"))
+                        log_message(entry_to_str(entry), info="update")
                     elif replace_arxiv and is_arxiv(orig_entry) and not is_arxiv(entry):
                         # non-arxiv version was found on DBLP
-                        logging.info(colored(f"[UPDATE_ARXIV] {log_title(entry['title'])}", "green", attrs=["bold"]))
+                        log_message(entry_to_str(entry), info="update_arxiv")
                     else:
                         # a different version was found on DBLP
-                        logging.info(colored(f"[UPDATE] {log_title(entry['title'])}", "green"))
+                        log_message(entry_to_str(entry), info="update")
 
             else:
                 # no result found, keeping the original entry
@@ -314,7 +361,7 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
 
                 title = protect_titlecase(title)
                 bib_database.entries[i]["title"] = title
-                logging.info(colored(f"[KEEP] {log_title(title)}", "light_grey"))
+                log_message(entry_to_str(bib_database.entries[i]), info="keep")
 
     new_entries_cnt = len(bib_database.entries)
     assert orig_entries_cnt == new_entries_cnt
@@ -324,7 +371,7 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
         bwriter.order_entries_by = order_entries_by
 
         bibtexparser.dump(bib_database, f, writer=bwriter)
-        logger.info(colored(f"[FINISH] Saving the results to {out_file}.", "cyan"))
+        log_message(f"Saving the results to {out_file}.", info="info")
 
 
 def cli():
