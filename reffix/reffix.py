@@ -27,6 +27,7 @@ import titlecase
 import re
 import pprint
 import unidecode
+import dateparser
 
 from bibtexparser.bparser import BibTexParser
 import bibtexparser.customization as bc
@@ -123,6 +124,16 @@ def is_equivalent(entry, orig_entry):
 
 
 def get_equivalent_entry(entries, orig_entry):
+    # sort entries using timestamp (newer better) -> year (newer better) -> # of keys (more complete better) -> ID (ensure deterministic order)
+    entries.sort(
+        key=lambda x: (
+            dateparser.parse(x.get("timestamp", "")),
+            x.get("year", ""),
+            len(x.keys()),
+            x.get("ID", ""),
+        ),
+        reverse=True,
+    )
     for entry in entries:
         if is_equivalent(entry, orig_entry):
             return entry
@@ -139,11 +150,9 @@ def get_best_entry(entries, orig_entry):
         return entries[0]
 
     equivalent_entry = get_equivalent_entry(entries, orig_entry)
+
     if equivalent_entry:
         return equivalent_entry
-
-    # sorting the results by year (newer is better) and by the number of entries (more is better)
-    entries.sort(key=lambda x: (int(x.get("year", 0)), len(x.keys())))
 
     return entries[-1]
 
