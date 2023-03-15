@@ -417,6 +417,12 @@ def cli():
     out_dir = os.path.dirname(out_file) if os.path.dirname(out_file) else "."
     os.makedirs(out_dir, exist_ok=True)
 
+    if not args.replace_arxiv:
+        log_message(
+            "Not replacing arXiv entries with entries found in a book or journal. Use the flag `--replace_arxiv` if you wish to replace arXiv entries.",
+            "warning",
+        )
+
     process(
         in_file=args.in_file,
         out_file=out_file,
