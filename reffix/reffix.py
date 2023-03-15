@@ -41,6 +41,7 @@ dblp_api = "https://dblp.org/search/publ/api"
 def get_dblp_results(query):
     params = {"format": "bib", "q": query}
     res = requests.get(dblp_api, params=params)
+
     try:
         if res.status_code == 200:
             # new instance needs to be created to use a new database
@@ -48,6 +49,9 @@ def get_dblp_results(query):
             bib = bp.parse(res.text)
 
             return bib.entries
+        else:
+            logger.error(colored(f"[ERROR] DBLP API returned status code {res.status_code}", "red"))
+            return None
     except Exception as e:
         logger.exception(e)
         raise e
