@@ -71,8 +71,8 @@ def get_dblp_results(query, attempts=0):
     params = {"format": "bib", "q": query}
     res = requests.get(DBLP_API, params=params)
     max_attempts = 5
-    wait_default_time = 30  # seconds
-    wait_multiply_factor = 2
+    wait_default_time = 60  # seconds
+    wait_multiply_factor = 2 # default time multiplied by this factor for each attempt
 
     try:
         if res.status_code == 200:
