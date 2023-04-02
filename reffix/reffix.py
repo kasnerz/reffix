@@ -222,10 +222,9 @@ def cli():
         "`ID` can be used to refer to the Bibtex key. The default None value keeps the original order of Bib entries. ",
     )
     parser.add_argument(
-        "--publisher",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Use --no-publisher to suppress publishers in conference papers and journals (still kept for books)",
+        "--no-publisher",
+        action="store_true",
+        help="Suppress publishers in conference papers and journals (still kept for books)",
     )
     parser.add_argument(
         "--process-conf-loc",
@@ -233,10 +232,9 @@ def cli():
         help="Parse conference dates and locations, remove from proceedings names, store locations under address",
     )
     parser.add_argument(
-        "--use-formatter",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Set to False to disable automatic BibTeX formatting.",
+        "--no-formatting",
+        action="store_true",
+        help="Disable automatic BibTeX formatting.",
     )
 
     args = parser.parse_args()
@@ -262,9 +260,10 @@ def cli():
         replace_arxiv=args.replace_arxiv,
         force_titlecase=args.force_titlecase,
         interact=args.interact,
-        no_publisher=not args.publisher,
+        no_publisher=args.no_publisher,
         process_conf_loc=args.process_conf_loc,
         order_entries_by=args.sort_by,
+        use_formatter=not args.no_formatting,
     )
 
 
