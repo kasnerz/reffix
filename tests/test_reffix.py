@@ -3,6 +3,8 @@ import os
 from unittest.mock import patch, Mock
 import reffix.reffix as reffix
 import reffix.utils as ut
+import bibtexparser
+from bibtexparser.bparser import BibTexParser
 
 
 class TestReffix(unittest.TestCase):
@@ -105,6 +107,12 @@ class TestReffix(unittest.TestCase):
             process_conf_loc=False,
         )
         self.assertTrue(os.path.exists("tests/test.fixed_arxiv.bib"))
+
+        # check if we can parse the output file
+        bp = BibTexParser(interpolate_strings=False, common_strings=True)
+
+        with open("tests/test.fixed_arxiv.bib") as bibtex_file:
+            bibtexparser.load(bibtex_file, parser=bp)
 
         os.remove("tests/test.fixed.bib")
         os.remove("tests/test.fixed_arxiv.bib")

@@ -78,7 +78,15 @@ def select_entry(entries, orig_entry, replace_arxiv):
 
 
 def process(
-    in_file, out_file, replace_arxiv, force_titlecase, interact, no_publisher, process_conf_loc, order_entries_by=None
+    in_file,
+    out_file,
+    replace_arxiv,
+    force_titlecase,
+    interact,
+    no_publisher,
+    process_conf_loc,
+    order_entries_by=None,
+    use_formatter=True,
 ):
     if process_conf_loc:
         import spacy
@@ -163,12 +171,20 @@ def process(
             if no_publisher and entry.get("ENTRYTYPE") in ["article", "inproceedings"] and "publisher" in entry:
                 del entry["publisher"]
 
+            # attempt to fix potential errors
+            entry = ut.clean_entry(entry)
+
     new_entries_cnt = len(bib_database.entries)
     assert orig_entries_cnt == new_entries_cnt
 
     with open(out_file, "w") as f:
         bwriter = bibtexparser.bwriter.BibTexWriter()
         bwriter.order_entries_by = order_entries_by
+
+        if use_formatter:
+            bwriter.indent = "  "  # indent entries with 2 spaces instead of one
+            bwriter.align_values = True
+            bwriter.align_multiline_values = True
 
         bibtexparser.dump(bib_database, f, writer=bwriter)
         ut.log_message(f"Saving the results to {out_file}.", info="info")
@@ -215,6 +231,12 @@ def cli():
         "--process-conf-loc",
         action="store_true",
         help="Parse conference dates and locations, remove from proceedings names, store locations under address",
+    )
+    parser.add_argument(
+        "--use-formatter",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Set to False to disable automatic BibTeX formatting.",
     )
 
     args = parser.parse_args()
