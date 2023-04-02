@@ -8,6 +8,7 @@ import titlecase
 import re
 import unidecode
 import dateparser
+import time
 
 from bibtexparser.bparser import BibTexParser
 import bibtexparser.customization as bc
@@ -66,9 +67,12 @@ def log_message(message, info, level=logging.INFO):
     logger.log(level=level, msg=f"{info_str} {message}")
 
 
-def get_dblp_results(query):
+def get_dblp_results(query, attempts=0):
     params = {"format": "bib", "q": query}
     res = requests.get(DBLP_API, params=params)
+    max_attempts = 5
+    wait_default_time = 60  # seconds
+    wait_multiply_factor = 2 # default time multiplied by this factor for each attempt
 
     try:
         if res.status_code == 200:
@@ -77,6 +81,22 @@ def get_dblp_results(query):
             bib = bp.parse(res.text)
 
             return bib.entries
+        elif res.status_code == 429 and attempts < max_attempts:
+            wait_time = wait_default_time * (wait_multiply_factor**attempts)
+            log_message(
+                f"DBLP API seems overloaded, retrying again in {wait_time} seconds (attempts {attempts+1}/{max_attempts})...",
+                "error",
+                level=logging.ERROR,
+            )
+            time.sleep(wait_time)
+            return get_dblp_results(query, attempts + 1)
+        elif res.status_code == 429 and attempts >= max_attempts:
+            log_message(
+                f"DBLP API seems overloaded, please try again later. Consider also pruning your .bib file to make less requests.",
+                "error",
+                level=logging.ERROR,
+            )
+            return None
         else:
             log_message(f"DBLP API returned status code {res.status_code}", "error", level=logging.ERROR)
             return None
