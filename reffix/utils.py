@@ -70,7 +70,9 @@ def log_message(message, info, level=logging.INFO):
 def get_dblp_results(query, attempts=0):
     params = {"format": "bib", "q": query}
     res = requests.get(DBLP_API, params=params)
-    max_attempts = 4
+    max_attempts = 5
+    wait_default_time = 30  # seconds
+    wait_multiply_factor = 2
 
     try:
         if res.status_code == 200:
@@ -80,15 +82,16 @@ def get_dblp_results(query, attempts=0):
 
             return bib.entries
         elif res.status_code == 429 and attempts < max_attempts:
+            wait_time = wait_default_time * (wait_multiply_factor**attempts)
             log_message(
-                f"DBLP API is overloaded, retrying again in 15 seconds (attempts {attempts}/{max_attempts})...",
+                f"DBLP API seems overloaded, retrying again in {wait_time} seconds (attempts {attempts+1}/{max_attempts})...",
                 "error",
                 level=logging.ERROR,
             )
-            time.sleep(15)
+            time.sleep(wait_time)
             return get_dblp_results(query, attempts + 1)
         elif res.status_code == 429 and attempts >= max_attempts:
-            log_message(f"DBLP API is overloaded, please try later.", "error", level=logging.ERROR)
+            log_message(f"DBLP API seems overloaded, please try later.", "error", level=logging.ERROR)
             return None
         else:
             log_message(f"DBLP API returned status code {res.status_code}", "error", level=logging.ERROR)
