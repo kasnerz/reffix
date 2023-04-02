@@ -376,17 +376,17 @@ def process(in_file, out_file, replace_arxiv, force_titlecase, interact, order_e
 
 def cli():
     parser = argparse.ArgumentParser()
-    parser.add_argument("in_file", type=str, help="Bibliography file")
+    parser.add_argument("input", type=str, help="Bibliography file")
     parser.add_argument("-o", "--out", type=str, default=None, help="Output file")
     parser.add_argument(
         "-a",
-        "--replace_arxiv",
+        "--replace-arxiv",
         action="store_true",
         help="Try to use a non-arXiv version whenever possible",
     )
     parser.add_argument(
         "-t",
-        "--force_titlecase",
+        "--force-titlecase",
         action="store_true",
         help="Use the `titlecase` package to fix titlecasing for paper names which are not titlecased",
     )
@@ -398,7 +398,7 @@ def cli():
     )
     parser.add_argument(
         "-s",
-        "--sort_by",
+        "--sort-by",
         default=None,
         nargs="*",
         help="Multiple sort conditions compatible with bibtexparser.BibTexWriter applied in the provided order. "
@@ -410,7 +410,7 @@ def cli():
     logger.info(args)
 
     if args.out is None:
-        out_file = args.in_file.replace(".bib", "") + ".fixed.bib"
+        out_file = args.input.replace(".bib", "") + ".fixed.bib"
     else:
         out_file = args.out
 
@@ -419,12 +419,12 @@ def cli():
 
     if not args.replace_arxiv:
         log_message(
-            "Not replacing arXiv entries with entries found in a book or journal. Use the flag `--replace_arxiv` if you wish to replace arXiv entries.",
+            "Not replacing arXiv entries with entries found in a book or journal. Use the flag `--replace-arxiv` if you wish to replace arXiv entries.",
             "warning",
         )
 
     process(
-        in_file=args.in_file,
+        in_file=args.input,
         out_file=out_file,
         replace_arxiv=args.replace_arxiv,
         force_titlecase=args.force_titlecase,
