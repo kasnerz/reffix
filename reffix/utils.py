@@ -91,7 +91,11 @@ def get_dblp_results(query, attempts=0):
             time.sleep(wait_time)
             return get_dblp_results(query, attempts + 1)
         elif res.status_code == 429 and attempts >= max_attempts:
-            log_message(f"DBLP API seems overloaded, please try later.", "error", level=logging.ERROR)
+            log_message(
+                f"DBLP API seems overloaded, please try again later. Consider also pruning your .bib file to make less requests.",
+                "error",
+                level=logging.ERROR,
+            )
             return None
         else:
             log_message(f"DBLP API returned status code {res.status_code}", "error", level=logging.ERROR)
