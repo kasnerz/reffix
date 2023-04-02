@@ -315,7 +315,27 @@ def process_conf_location(entry, nlp):
     if gpes:  # location found -- move to address
         entry["address"] = proc_title[gpes[0].start_char : gpes[-1].end_char]
         entry["booktitle"] = proc_title[: gpes[0].start_char].rstrip(",; ") + proc_suffix
+
     elif dates:  # date found -- just strip
         entry["booktitle"] = proc_title[: dates[0].start_char].rstrip(",; ") + proc_suffix
+
     # TODO case where date precedes the place
+    return entry
+
+
+def clean_entry(entry):
+    for key in entry.keys():
+        if type(entry[key]) is not str:
+            continue
+
+        # check if there is an uneven number of curly braces, if so, remove them all so that entry is not broken
+        if entry[key].count("{") != entry[key].count("}"):
+            entry[key] = entry[key].replace("{", "").replace("}", "")
+
+            # display warning
+            log_message(f"Extra parentheses detected in entry", "warning", level=logging.WARNING)
+
+        # replace @ (which is a special character) with " at "
+        entry[key] = entry[key].replace("@", " at ")
+
     return entry

@@ -171,6 +171,9 @@ def process(
             if no_publisher and entry.get("ENTRYTYPE") in ["article", "inproceedings"] and "publisher" in entry:
                 del entry["publisher"]
 
+            # attempt to fix potential errors
+            entry = ut.clean_entry(entry)
+
     new_entries_cnt = len(bib_database.entries)
     assert orig_entries_cnt == new_entries_cnt
 
