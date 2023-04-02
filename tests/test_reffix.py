@@ -2,6 +2,7 @@ import unittest
 import os
 from unittest.mock import patch, Mock
 import reffix.reffix as reffix
+import reffix.utils as ut
 
 
 class TestReffix(unittest.TestCase):
@@ -18,12 +19,12 @@ class TestReffix(unittest.TestCase):
 
     def test_get_dblp_results(self):
         query = "Evaluating semantic accuracy of data-to-text generation with natural language inference Dusek Ondrej"
-        results = reffix.get_dblp_results(query)
+        results = ut.get_dblp_results(query)
         self.assertGreaterEqual(len(results), 1)
 
     def test_protect_titlecase(self):
         title = "Test {T}itle in a 3-D U-Net Spatially-Varying Mip-NeRF"
-        protected_title = reffix.protect_titlecase(title)
+        protected_title = ut.protect_titlecase(title)
 
         self.assertEqual(protected_title, "{T}est {T}itle in a 3-{D} {U}-{N}et {S}patially-Varying {M}ip-{N}e{R}{F}")
 
@@ -33,10 +34,10 @@ class TestReffix(unittest.TestCase):
         entry3 = {"booktitle": "Test Book XYZ", "year": "2022", "pages": "15-20"}
         entry4 = {"booktitle": "Test Book XYZ", "year": "2023", "pages": "15-20"}
 
-        self.assertTrue(reffix.is_equivalent(entry1, self.entry))
-        self.assertTrue(reffix.is_equivalent(entry2, self.entry))
-        self.assertTrue(reffix.is_equivalent(entry3, self.entry))
-        self.assertFalse(reffix.is_equivalent(entry4, self.entry))
+        self.assertTrue(ut.is_equivalent(entry1, self.entry))
+        self.assertTrue(ut.is_equivalent(entry2, self.entry))
+        self.assertTrue(ut.is_equivalent(entry3, self.entry))
+        self.assertFalse(ut.is_equivalent(entry4, self.entry))
 
     def test_is_arxiv(self):
         arxiv_entry1 = {"journal": "CoRR"}
@@ -44,10 +45,10 @@ class TestReffix(unittest.TestCase):
         arxiv_entry3 = {"url": "https://arxiv.org/abs/1234.56789"}
         non_arxiv_entry = {"journal": "Test Journal", "year": "2022", "pages": "1-10"}
 
-        self.assertTrue(reffix.is_arxiv(arxiv_entry1))
-        self.assertTrue(reffix.is_arxiv(arxiv_entry2))
-        self.assertTrue(reffix.is_arxiv(arxiv_entry3))
-        self.assertFalse(reffix.is_arxiv(non_arxiv_entry))
+        self.assertTrue(ut.is_arxiv(arxiv_entry1))
+        self.assertTrue(ut.is_arxiv(arxiv_entry2))
+        self.assertTrue(ut.is_arxiv(arxiv_entry3))
+        self.assertFalse(ut.is_arxiv(non_arxiv_entry))
 
     def test_select_entry(self):
         entries = [
@@ -84,12 +85,24 @@ class TestReffix(unittest.TestCase):
 
     def test_process(self):
         reffix.process(
-            "tests/test.bib", "tests/test.fixed.bib", replace_arxiv=False, force_titlecase=False, interact=False
+            "tests/test.bib",
+            "tests/test.fixed.bib",
+            replace_arxiv=False,
+            force_titlecase=False,
+            interact=False,
+            no_publisher=False,
+            process_conf_loc=False,
         )
         self.assertTrue(os.path.exists("tests/test.fixed.bib"))
 
         reffix.process(
-            "tests/test.bib", "tests/test.fixed_arxiv.bib", replace_arxiv=True, force_titlecase=False, interact=False
+            "tests/test.bib",
+            "tests/test.fixed_arxiv.bib",
+            replace_arxiv=True,
+            force_titlecase=False,
+            interact=False,
+            no_publisher=False,
+            process_conf_loc=False,
         )
         self.assertTrue(os.path.exists("tests/test.fixed_arxiv.bib"))
 
