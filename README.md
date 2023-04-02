@@ -1,17 +1,36 @@
-# reffix: Fixing BibTeX reference list with DBLP API :wrench:
+# reffix: Fixing BibTeX reference list with DBLP API 🔧
 
-:arrow_right: *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs, or using arXiv pre-prints instead of published version.
+[![reffix](https://github.com/kasnerz/reffix/actions/workflows/python-package.yml/badge.svg)](https://github.com/kasnerz/reffix/actions/workflows/python-package.yml)
+![GitHub](https://img.shields.io/github/license/kasnerz/reffix)
+![GitHub issues](https://img.shields.io/github/issues/kasnerz/reffix)
+![PyPI](https://img.shields.io/pypi/v/reffix)
+![PyPI downloads](https://img.shields.io/pypi/dm/reffix)
+![Github stars](https://img.shields.io/github/stars/kasnerz/reffix?style=social)
 
 
-:arrow_right: *Reffix* uses a **conservative approach** to keep your bibliography valid. It also does not require any local database of papers since it uses online queries to **DBLP API**.
+➡️ *Reffix* is a simple tool for improving the BibTeX list of references in your paper. It can fix several common errors such as incorrect capitalization, missing URLs, or using arXiv pre-prints instead of published version.
 
-:arrow_right: The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references.
+➡️ *Reffix* queries the **[DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html)**, so it does not require any local database of papers.
+
+➡️ *Reffix* uses a conservative approach to keep your bibliography valid. 
+
+➡️ The tool is developed with NLP papers in mind, but it can be used on any BibTeX list of references containing computer science papers present on [DBLP](https://dblp.org).
+
+## Quickstart
+
+👉️ You can now install `reffix` from [PyPI](https://pypi.org/project/reffix/):
+```
+pip install -U reffix
+reffix [BIB_FILE]
+```
+
+See the Installation and Usage section below for more details.
 
 ## Example
 **Before the update (Google Scholar):** 
-- :negative_squared_cross_mark: arXiv version 
-- :negative_squared_cross_mark: no URL 
-- :negative_squared_cross_mark: capitalization lost
+- ❎ arXiv version 
+- ❎ no URL 
+- ❎ capitalization lost
 ```
  {  
     'ENTRYTYPE': 'article',
@@ -25,9 +44,9 @@
 
 ```
 **After the update (DBLP + preserving capitalization):**
-- :heavy_check_mark: ACL version
-- :heavy_check_mark: URL included
-- :heavy_check_mark: capitalization preserved 
+- ✔️ ACL version
+- ✔️ URL included
+- ✔️ capitalization preserved 
 ```
  {   
     'ENTRYTYPE': 'inproceedings',
@@ -54,9 +73,9 @@
 ```
 
 ## Main features
-- **Completing references** – *reffix* queries DBLP API to find a complete reference for each entry in the BibTeX file. 
-- **Replacing arXiv preprints** –  *reffix* can replace arXiv pre-prints with the version published at a conference or in a journal.
-- **Preserving titlecase** – in order to [preserve correct casing](https://tex.stackexchange.com/questions/10772/bibtex-loses-capitals-when-creating-bbl-file), *reffix* wraps individual title-cased words in the title using the curly brackets.
+- **Completing references** – *reffix* queries the DBLP API with the paper title and the first author's name to find a complete reference for each entry in the BibTeX file. 
+- **Replacing arXiv preprints** –  *reffix* can try to replace arXiv pre-prints with the version published at a conference or in a journal whenever possible.
+- **Preserving titlecase** – in order to [preserve correct casing](https://tex.stackexchange.com/questions/10772/bibtex-loses-capitals-when-creating-bbl-file), *reffix* wraps individual uppercased words in the paper title in curly brackets.
 - **Conservative approach**: 
   + the original .bib file is preserved 
   + no references are deleted
@@ -64,41 +83,50 @@
   + the version of the paper corresponding to the original entry should be selected first
 - **Interactive mode** – you can confirm every change manually.
 
-The package uses [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) for parsing the BibTex files, [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html) for updating the references, and the [titlecase](https://github.com/ppannuto/python-titlecase) package for optional extra titlecasing of the titles.
+The package uses [bibtexparser](https://github.com/sciunto-org/python-bibtexparser) for parsing the BibTex files, [DBLP API](https://dblp.org/faq/How+to+use+the+dblp+search+API.html) for updating the references, and the [titlecase](https://github.com/ppannuto/python-titlecase) package for optional extra titlecasing.
 
 
+## Installation
+
+You can install `reffix` from [PyPI](https://pypi.org/project/reffix/):
+```
+pip install reffix
+```
+
+For development, you can install the package in the editable mode:
+```
+pip install -e .[dev]
+```
 ## Usage
+Run the script with the .bib file as the first argument:
+```
+reffix [IN_BIB_FILE]
+```
+By default, the program will run in batch mode, save the outputs in the file with an extra ".fixed" suffix, and keep the arXiv versions.
 
-1. Clone the repository and install the requirements:
+The following command will run reffix in interactive mode, save the outputs to a custom file, and replace arXiv versions:
 ```
-git clone https://github.com/kasnerz/reffix.git
-cd reffix
-pip install -r requirements.txt
-```
-2. Run the script with the .bib file as the first argument:
-```
-./reffix.py path/to/bibtex_file.bib
-```
-Or with all the features enabled:
-```
-./reffix.py -iat path/to/bibtex_file.bib -o path/to/output_file.bib
+reffix [IN_BIB_FILE] -o [OUT_BIB_FILE] -i -a
 ```
 ### Flags
-| short | long | description |
-| ---------- | ---------------------- |-----------  |
-| `-o`       | `--out`   | Output filename. If not specified, the default filename `<original_name>.fixed` is used. |
-| `-i` | `--interact` | Interactive mode. Every replacement of an entry with DBLP result has to be confirmed manually. |
-| `-a` | `--replace_arxiv` | Replace arXiv versions. If a non-arXiv version (e.g. published at a conference or in a journal) is found at DBLP, it is preferred to the arXiv version. |
-| `-t` | `--force_titlecase` | Force titlecase for all entries. The `titlecase` package is used to fix casing of titles also for the entries not found on DBLP. (Note that the capitalizaton rules used by the package may be a bit different, which is why by default the capitalization at DBLP is assumed to be correct.)|
+| short | long                 | description                                                                                                                                                                                                                                                                                                                                                                                                        |
+| ----- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `-o`  | `--out`              | Output filename. If not specified, the default filename `<original_name>.fixed.bib` is used.                                                                                                                                                                                                                                                                                                                       |
+| `-i`  | `--interact`         | Interactive mode. Every replacement of an entry with DBLP result has to be confirmed manually.                                                                                                                                                                                                                                                                                                                     |
+| `-a`  | `--replace-arxiv`    | Replace arXiv versions. If a non-arXiv version (e.g. published at a conference or in a journal) is found at DBLP, it is preferred to the arXiv version.                                                                                                                                                                                                                                                            |
+| `-t`  | `--force-titlecase`  | Force titlecase for all entries. The `titlecase` package is used to fix casing of titles which are not titlecased. (Note that the capitalizaton rules used by the package may be a bit different.)                                                                                                                                                                                                                 |
+| `-s`  | `--sort-by`          | Multiple sort conditions compatible with [bibtexparser.BibTexWriter](https://bibtexparser.readthedocs.io/en/master/_modules/bibtexparser/bwriter.html) applied in the provided order. Example: `-s ENTRYTYPE year` sorts the list by the entry type as its primary key and year as its secondary key. `ID` can be used to refer to the Bibtex key. The default None value keeps the original order of Bib entries. |
+|       | `--no-publisher`     | Suppress publishers in conference papers and journals (still kept for books).                                                                                                                                                                                                                                                                                                                                      |
+|       | `--process-conf-loc` | Parse conference dates and locations, remove from proceedings names, store locations under address.                                                                                                                                                                                                                                                                                                                |
 
 ## Notes
-Although *reffix* uses a conservative approach, it provides **no guarantees** that the output references are actually correct. 
+Although *reffix* uses a conservative approach, it provides no guarantees that the output references are actually correct. 
 
 If you want to make sure that *reffix* does not introduce any unwanted changes, please use the interactive mode (flag `-i`).
 
-The tool depends on **DBLP API** which is subject to change. I will try to update the project if necessary, but it may still occasionally break. I welcome any pull requests with improvements.
+The tool depends on **DBLP API** which may change any time in the future. I will try to update the script if necessary, but it may still occasionally break. I welcome any pull requests with improvements.
 
-Please be considerate regarding the DBLP API and do not generate high traffic for their servers.
+Please be considerate regarding the DBLP API and do not generate high traffic for their servers :-) 
 
 ## Contact
 For any questions or suggestions, send an e-mail to kasner@ufal.mff.cuni.cz.
