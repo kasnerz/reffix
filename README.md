@@ -129,5 +129,10 @@ The tool depends on **DBLP API** which may change any time in the future. I will
 
 Please be considerate regarding the DBLP API and do not generate high traffic for their servers :-) 
 
+For lowering the demand, you can use the [bibexport](https://ctan.org/pkg/bibexport) tool for generating a file `compact.bib` containing only the references used in the paper. As an input, use the file `<myarticle>.aux` created during compilation.
+```
+bibexport -o compact.bib <myarticle>.aux
+```
+
 ## Contact
 For any questions or suggestions, send an e-mail to kasner@ufal.mff.cuni.cz.
