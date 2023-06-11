@@ -25,10 +25,15 @@ class TestReffix(unittest.TestCase):
         self.assertGreaterEqual(len(results), 1)
 
     def test_protect_titlecase(self):
-        title = "Test {T}itle in a 3-D U-Net Spatially-Varying Mip-NeRF"
+        title = (
+            "PartNet: {A} Large-Scale Benchmark for Fine-Grained and Hierarchical Part-Level 3D Object Understanding"
+        )
         protected_title = ut.protect_titlecase(title)
 
-        self.assertEqual(protected_title, "{T}est {T}itle in a 3-{D} {U}-{N}et {S}patially-Varying {M}ip-{N}e{R}{F}")
+        self.assertEqual(
+            protected_title,
+            "{PartNet}: {A} Large-Scale Benchmark for Fine-Grained and Hierarchical Part-Level {3D} Object Understanding",
+        )
 
     def test_is_equivalent(self):
         entry1 = {"booktitle": "Test Book", "year": "2022", "pages": "1-10"}
