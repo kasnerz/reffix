@@ -72,7 +72,7 @@ def get_dblp_results(query, attempts=0):
     res = requests.get(DBLP_API, params=params)
     max_attempts = 5
     wait_default_time = 60  # seconds
-    wait_multiply_factor = 2 # default time multiplied by this factor for each attempt
+    wait_multiply_factor = 2  # default time multiplied by this factor for each attempt
 
     try:
         if res.status_code == 200:
@@ -186,35 +186,31 @@ def protect_titlecase(title):
     words = []
 
     for word in title.split():
-        if "{" in word:
+        if word[0] == "{" and word[-1] == "}":
             # already (presumably) protected
             words.append(word)
-            continue
-
-        letters = []
-
-        for i, letter in enumerate(word):
-            # protect individual capital letters
-            protect = True
+        else:
+            protect = False
             subwords = word.split("-")
-
-            if (
-                len(subwords) > 1
-                and len(subwords[0]) > 1
-                and i > 0
-                and word[i - 1] == "-"
-                and all(l.islower() for l in word[i + 1 :])
-            ):
-                # 3-D, U-Net, Mip-NeRF: protect
-                # Spatially-Varying: don't protect
-                protect = False
-
-            if letter.isupper() and protect:
-                letters.append(r"{" + letter + r"}")
+            for sw in subwords:
+                if len(subwords) > 1 and len(sw) == 1:
+                    # 3-D, U-Net
+                    protect = True
+                    break
+                if any(l.isupper() for l in sw[1:]):
+                    # Only considers capitals after the first letter
+                    # Mip-NeRF: protect
+                    # Spatially-Varying: don't protect
+                    protect = True
+                    break
+            if protect:
+                # leave the : out of the protection
+                if word[-1] == ":":
+                    words.append(r"{" + word[:-1] + r"}:")
+                else:
+                    words.append(r"{" + word + r"}")
             else:
-                letters.append(letter)
-
-        words.append("".join(letters))
+                words.append(word)
 
     return " ".join(words)
 
