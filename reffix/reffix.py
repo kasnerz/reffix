@@ -20,10 +20,13 @@ The package uses a conservative approach:
 
 import os
 import argparse
+import importlib.util
 import logging
 import bibtexparser
 import re
 import pprint
+import subprocess
+import sys
 
 from . import utils as ut
 
@@ -32,6 +35,28 @@ import bibtexparser.customization as bc
 
 logging.basicConfig(format="%(message)s", level=logging.INFO, datefmt="%H:%M:%S")
 logger = logging.getLogger(__name__)
+
+
+def _ensure_spacy_nlp(model_name="en_core_web_sm"):
+    try:
+        import spacy
+    except ImportError as exc:
+        raise RuntimeError(
+            "The `--process-conf-loc` option requires the optional spaCy dependency. "
+            "Install it with `pip install 'reffix[conf-loc]'` or `uv tool install 'reffix[conf-loc]'`."
+        ) from exc
+
+    if importlib.util.find_spec(model_name) is None:
+        ut.log_message(f"Downloading spaCy model `{model_name}`...", "info")
+        subprocess.run([sys.executable, "-m", "spacy", "download", model_name], check=True)
+        importlib.invalidate_caches()
+
+        if importlib.util.find_spec(model_name) is None:
+            raise RuntimeError(f"spaCy model `{model_name}` could not be installed automatically.")
+
+        ut.log_message("spaCy model downloaded successfully.", "info")
+
+    return spacy.load(model_name)
 
 
 def select_entry(entries, orig_entry, replace_arxiv):
@@ -89,15 +114,7 @@ def process(
     use_formatter=True,
 ):
     if process_conf_loc:
-        import spacy
-
-        # download spacy model if not existing
-        if not spacy.util.is_package("en_core_web_sm"):
-            ut.log_message("Downloading spacy model...", "info")
-            os.system("python -m spacy download en_core_web_sm")
-            ut.log_message("Spacy model downloaded successfully.", "info")
-
-        nlp = spacy.load("en_core_web_sm")
+        nlp = _ensure_spacy_nlp()
 
     bp = BibTexParser(interpolate_strings=False, common_strings=True)
 
@@ -116,7 +133,7 @@ def process(
                     # don't try to match if there is no first author
                     continue
 
-                query = title + " " + first_author
+                query = ut.build_dblp_query(orig_entry)
 
                 entries = ut.get_dblp_results(query)
                 entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)

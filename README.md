@@ -93,6 +93,14 @@ You can install `reffix` from [PyPI](https://pypi.org/project/reffix/):
 pip install reffix
 ```
 
+The core package does not require spaCy. If you want to use `--process-conf-loc`, install the optional extra:
+```
+pip install 'reffix[conf-loc]'
+uv tool install 'reffix[conf-loc]'
+```
+
+The first time `--process-conf-loc` is used, `reffix` will download the `en_core_web_sm` model automatically into the active environment.
+
 For development, you can install the package in the editable mode:
 ```
 pip install -e .[dev]
