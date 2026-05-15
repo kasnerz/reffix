@@ -1,5 +1,6 @@
 import unittest
 import os
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import patch, Mock
 import reffix.reffix as reffix
@@ -226,37 +227,38 @@ class TestReffix(unittest.TestCase):
         self.assertEqual(best_entry_2, entries[0])
 
     def test_process(self):
-        out_file = "tests/test.fixed.bib"
-        out_arxiv_file = "tests/test.fixed_arxiv.bib"
-        reffix.process(
-            "tests/test.bib",
-            out_file,
-            replace_arxiv=False,
-            force_titlecase=False,
-            interact=False,
-            no_publisher=False,
-            process_conf_loc=False,
-        )
-        self.assertTrue(os.path.exists(out_file))
-        reffix.process(
-            "tests/test.bib",
-            out_arxiv_file,
-            replace_arxiv=True,
-            force_titlecase=False,
-            interact=False,
-            no_publisher=False,
-            process_conf_loc=False,
-        )
-        self.assertTrue(os.path.exists(out_arxiv_file))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_file = os.path.join(temp_dir, "test.fixed.bib")
+            out_arxiv_file = os.path.join(temp_dir, "test.fixed_arxiv.bib")
 
-        # check if we can parse the output file
-        bp = BibTexParser(interpolate_strings=False, common_strings=True)
+            with patch("reffix.reffix.ut.get_dblp_results", return_value=[]):
+                reffix.process(
+                    "tests/test.bib",
+                    out_file,
+                    replace_arxiv=False,
+                    force_titlecase=False,
+                    interact=False,
+                    no_publisher=False,
+                    process_conf_loc=False,
+                )
+                self.assertTrue(os.path.exists(out_file))
 
-        with open(out_arxiv_file) as bibtex_file:
-            bibtexparser.load(bibtex_file, parser=bp)
+                reffix.process(
+                    "tests/test.bib",
+                    out_arxiv_file,
+                    replace_arxiv=True,
+                    force_titlecase=False,
+                    interact=False,
+                    no_publisher=False,
+                    process_conf_loc=False,
+                )
+                self.assertTrue(os.path.exists(out_arxiv_file))
 
-        os.remove(out_file)
-        os.remove(out_arxiv_file)
+            # check if we can parse the output file
+            bp = BibTexParser(interpolate_strings=False, common_strings=True)
+
+            with open(out_arxiv_file) as bibtex_file:
+                bibtexparser.load(bibtex_file, parser=bp)
 
     @patch("reffix.reffix.importlib.util.find_spec")
     @patch("reffix.reffix.importlib.invalidate_caches")
