@@ -98,6 +98,43 @@ class TestReffix(unittest.TestCase):
             "We Need Structured Output Towards User centered Constraints on Large Language Model Output",
         )
 
+    def test_preserve_original_authors_keeps_diacritics(self):
+        orig_entry = {
+            "author": "Du{\\v{s}}ek, Ond{\\v{r}}ej and Kasner, Zden{\\v{e}}k",
+        }
+        new_entry = {
+            "author": "Ondrej Dusek and\nZdenek Kasner",
+        }
+
+        merged_entry = ut.preserve_original_authors(orig_entry, new_entry)
+
+        self.assertEqual(merged_entry["author"], orig_entry["author"])
+
+    def test_preserve_original_authors_keeps_new_authors_when_they_differ(self):
+        orig_entry = {
+            "author": "Du{\\v{s}}ek, Ond{\\v{r}}ej",
+        }
+        new_entry = {
+            "author": "Ondrej Dusek and Zdenek Kasner",
+        }
+
+        merged_entry = ut.preserve_original_authors(orig_entry, new_entry)
+
+        self.assertEqual(merged_entry["author"], new_entry["author"])
+
+    @patch("reffix.utils.bc.splitname")
+    def test_get_authors_canonical_falls_back_when_splitname_breaks(self, splitname_mock):
+        splitname_mock.side_effect = StopIteration()
+
+        authors = ut.get_authors_canonical(
+            {
+                "author": "Da San Martino, Giovanni and Yu, Seunghak",
+                "title": "Fine-Grained Analysis of Propaganda in News Article",
+            }
+        )
+
+        self.assertEqual(authors, ["Giovanni Da San Martino", "Seunghak Yu"])
+
     def test_update_dblp_request_interval_increases_after_429(self):
         original_interval = ut._dblp_request_interval
         try:
@@ -189,36 +226,37 @@ class TestReffix(unittest.TestCase):
         self.assertEqual(best_entry_2, entries[0])
 
     def test_process(self):
+        out_file = "tests/test.fixed.bib"
+        out_arxiv_file = "tests/test.fixed_arxiv.bib"
         reffix.process(
             "tests/test.bib",
-            "tests/test.fixed.bib",
+            out_file,
             replace_arxiv=False,
             force_titlecase=False,
             interact=False,
             no_publisher=False,
             process_conf_loc=False,
         )
-        self.assertTrue(os.path.exists("tests/test.fixed.bib"))
-
+        self.assertTrue(os.path.exists(out_file))
         reffix.process(
             "tests/test.bib",
-            "tests/test.fixed_arxiv.bib",
+            out_arxiv_file,
             replace_arxiv=True,
             force_titlecase=False,
             interact=False,
             no_publisher=False,
             process_conf_loc=False,
         )
-        self.assertTrue(os.path.exists("tests/test.fixed_arxiv.bib"))
+        self.assertTrue(os.path.exists(out_arxiv_file))
 
         # check if we can parse the output file
         bp = BibTexParser(interpolate_strings=False, common_strings=True)
 
-        with open("tests/test.fixed_arxiv.bib") as bibtex_file:
+        with open(out_arxiv_file) as bibtex_file:
             bibtexparser.load(bibtex_file, parser=bp)
 
-        os.remove("tests/test.fixed.bib")
-        os.remove("tests/test.fixed_arxiv.bib")
+        os.remove(out_file)
+        os.remove(out_arxiv_file)
 
     @patch("reffix.reffix.importlib.util.find_spec")
     @patch("reffix.reffix.importlib.invalidate_caches")

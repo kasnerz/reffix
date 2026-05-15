@@ -328,7 +328,7 @@ def get_authors_canonical(entry):
         authors = bc.convert_to_unicode({"author": entry_tmp["author"]})["author"]
         # convert special unicode characters to ascii
         authors = [unidecode.unidecode(name) for name in authors]
-        authors = [bc.splitname(a, strict_mode=False) for a in authors]
+        authors = [_split_author_name_safe(a) for a in authors]
         authors = [" ".join(a["first"]) + " " + " ".join(a["last"]) for a in authors]
     except (bc.InvalidName, TypeError) as x:
         log_message(f"Cannot parse authors: {entry_tmp['author']}", "warning", level=logging.WARNING)
@@ -341,6 +341,37 @@ def get_authors_canonical(entry):
         raise e
 
     return authors
+
+
+def _split_author_name_safe(author_name):
+    try:
+        return bc.splitname(author_name, strict_mode=False)
+    except StopIteration:
+        log_message(f"Falling back to simple author parsing for: {author_name}", "warning", level=logging.WARNING)
+
+        if "," in author_name:
+            last_name, first_name = [part.strip() for part in author_name.split(",", 1)]
+            return {"first": first_name.split(), "last": last_name.split()}
+
+        parts = author_name.split()
+        if len(parts) <= 1:
+            return {"first": parts, "last": []}
+
+        return {"first": parts[:-1], "last": [parts[-1]]}
+
+
+def preserve_original_authors(orig_entry, new_entry):
+    if "author" not in orig_entry or "author" not in new_entry:
+        return new_entry
+
+    orig_authors = get_authors_canonical(orig_entry)
+    new_authors = get_authors_canonical(new_entry)
+
+    if orig_authors and orig_authors == new_authors:
+        new_entry = new_entry.copy()
+        new_entry["author"] = orig_entry["author"]
+
+    return new_entry
 
 
 def protect_titlecase(title):

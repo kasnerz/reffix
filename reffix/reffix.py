@@ -141,6 +141,7 @@ def process(
                 if entry is not None:
                     # replace the new BibTeX reference label with the original one
                     entry["ID"] = orig_entry["ID"]
+                    entry = ut.preserve_original_authors(orig_entry, entry)
 
                     if process_conf_loc and entry.get("ENTRYTYPE") == "inproceedings":
                         entry = ut.process_conf_location(entry, nlp)
