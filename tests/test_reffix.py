@@ -1,5 +1,6 @@
 import unittest
 import os
+from types import SimpleNamespace
 from unittest.mock import patch, Mock
 import reffix.reffix as reffix
 import reffix.utils as ut
@@ -23,6 +24,103 @@ class TestReffix(unittest.TestCase):
         query = "Evaluating semantic accuracy of data-to-text generation with natural language inference Dusek Ondrej"
         results = ut.get_dblp_results(query)
         self.assertGreaterEqual(len(results), 1)
+
+    @patch("reffix.utils.requests.get")
+    def test_get_dblp_results_uses_json_search_and_fetches_bib(self, get_mock):
+        search_response = Mock()
+        search_response.status_code = 200
+        search_response.json.return_value = {
+            "result": {
+                "hits": {
+                    "hit": [
+                        {
+                            "info": {
+                                "key": "irrelevant/key",
+                                "url": "https://dblp.org/rec/irrelevant/key",
+                                "title": "Different Title",
+                            }
+                        },
+                        {
+                            "info": {
+                                "key": "journals/corr/abs-2404-05961",
+                                "url": "https://dblp.org/rec/journals/corr/abs-2404-05961",
+                                "title": "LLM2Vec",
+                            }
+                        },
+                    ]
+                }
+            }
+        }
+
+        bib_response = Mock()
+        bib_response.raise_for_status.return_value = None
+        bib_response.text = (
+            """@article{llm2vec,\n  title={LLM2Vec},\n  author={BehnamGhader, Parishad},\n  year={2024}\n}"""
+        )
+
+        get_mock.side_effect = [search_response, bib_response]
+
+        results = ut.get_dblp_results("llm2vec")
+
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["ID"], "llm2vec")
+        get_mock.assert_any_call(
+            ut.DBLP_API,
+            params={"format": "json", "q": "llm2vec", "h": 10},
+            timeout=30,
+        )
+        get_mock.assert_any_call("https://dblp.org/rec/journals/corr/abs-2404-05961.bib", params=None, timeout=30)
+        self.assertEqual(get_mock.call_count, 2)
+
+    @patch("reffix.utils.time.sleep")
+    @patch("reffix.utils.requests.get")
+    def test_get_dblp_results_retries_transient_server_errors(self, get_mock, sleep_mock):
+        failed_response = Mock(status_code=500)
+        search_response = Mock()
+        search_response.status_code = 200
+        search_response.json.return_value = {"result": {"hits": {"hit": []}}}
+        get_mock.side_effect = [failed_response, search_response]
+
+        results = ut.get_dblp_results("retry me")
+
+        self.assertEqual(results, [])
+        sleep_mock.assert_any_call(2)
+
+    def test_build_dblp_query_normalizes_bibtex_markup(self):
+        entry = {
+            "title": '"{W}e {N}eed {S}tructured {O}utput": {T}owards {U}ser-centered {C}onstraints on {L}arge {L}anguage {M}odel {O}utput'
+        }
+
+        query = ut.build_dblp_query(entry)
+
+        self.assertEqual(
+            query,
+            "We Need Structured Output Towards User centered Constraints on Large Language Model Output",
+        )
+
+    def test_update_dblp_request_interval_increases_after_429(self):
+        original_interval = ut._dblp_request_interval
+        try:
+            ut._dblp_request_interval = ut.DBLP_MIN_REQUEST_INTERVAL
+            response = Mock(status_code=429, headers={"Retry-After": "3"})
+
+            ut._update_dblp_request_interval(response=response)
+
+            self.assertEqual(ut._dblp_request_interval, 3.0)
+        finally:
+            ut._dblp_request_interval = original_interval
+
+    def test_update_dblp_request_interval_relaxes_after_success(self):
+        original_interval = ut._dblp_request_interval
+        try:
+            ut._dblp_request_interval = 2.0
+            response = Mock(status_code=200, headers={})
+
+            ut._update_dblp_request_interval(response=response)
+
+            self.assertEqual(ut._dblp_request_interval, 1.8)
+        finally:
+            ut._dblp_request_interval = original_interval
 
     def test_protect_titlecase(self):
         title = (
@@ -121,6 +219,49 @@ class TestReffix(unittest.TestCase):
 
         os.remove("tests/test.fixed.bib")
         os.remove("tests/test.fixed_arxiv.bib")
+
+    @patch("reffix.reffix.importlib.util.find_spec")
+    @patch("reffix.reffix.importlib.invalidate_caches")
+    @patch("reffix.reffix.subprocess.run")
+    @patch("builtins.__import__")
+    def test_ensure_spacy_nlp_downloads_model_with_current_interpreter(
+        self,
+        import_mock,
+        run_mock,
+        invalidate_caches_mock,
+        find_spec_mock,
+    ):
+        spacy_module = SimpleNamespace(load=Mock(return_value="nlp"))
+
+        def import_side_effect(name, *args, **kwargs):
+            if name == "spacy":
+                return spacy_module
+            return __import__(name, *args, **kwargs)
+
+        import_mock.side_effect = import_side_effect
+        find_spec_mock.side_effect = [None, object()]
+
+        nlp = reffix._ensure_spacy_nlp()
+
+        self.assertEqual(nlp, "nlp")
+        run_mock.assert_called_once_with(
+            [reffix.sys.executable, "-m", "spacy", "download", "en_core_web_sm"],
+            check=True,
+        )
+        invalidate_caches_mock.assert_called_once()
+        spacy_module.load.assert_called_once_with("en_core_web_sm")
+
+    @patch("builtins.__import__")
+    def test_ensure_spacy_nlp_requires_optional_dependency(self, import_mock):
+        def import_side_effect(name, *args, **kwargs):
+            if name == "spacy":
+                raise ImportError("missing spacy")
+            return __import__(name, *args, **kwargs)
+
+        import_mock.side_effect = import_side_effect
+
+        with self.assertRaisesRegex(RuntimeError, "optional spaCy dependency"):
+            reffix._ensure_spacy_nlp()
 
 
 if __name__ == "__main__":

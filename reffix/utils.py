@@ -19,6 +19,10 @@ logging.basicConfig(format="%(message)s", level=logging.INFO, datefmt="%H:%M:%S"
 logger = logging.getLogger(__name__)
 
 DBLP_API = "https://dblp.org/search/publ/api"
+DBLP_MIN_REQUEST_INTERVAL = 0.2
+DBLP_MAX_REQUEST_INTERVAL = 10.0
+_dblp_request_interval = DBLP_MIN_REQUEST_INTERVAL
+_dblp_last_request_at = 0.0
 
 DATE_REGEX = (
     r"([1-3]?[0-9](?:st|rd|nd|th)?((?: *[-–] *)[1-3]?[0-9](?:st|rd|nd|th)?)?) "
@@ -67,32 +71,191 @@ def log_message(message, info, level=logging.INFO):
     logger.log(level=level, msg=f"{info_str} {message}")
 
 
+def _pace_dblp_request():
+    global _dblp_last_request_at
+
+    now = time.monotonic()
+    wait_time = _dblp_request_interval - (now - _dblp_last_request_at)
+    if wait_time > 0:
+        time.sleep(wait_time)
+
+    _dblp_last_request_at = time.monotonic()
+
+
+def _set_dblp_request_interval(new_interval):
+    global _dblp_request_interval
+
+    _dblp_request_interval = min(DBLP_MAX_REQUEST_INTERVAL, max(DBLP_MIN_REQUEST_INTERVAL, new_interval))
+
+
+def _update_dblp_request_interval(response=None, had_error=False):
+    if had_error:
+        _set_dblp_request_interval(max(1.0, _dblp_request_interval * 2))
+        return
+
+    if response is None:
+        return
+
+    if response.status_code == 429:
+        retry_after = response.headers.get("Retry-After")
+        if retry_after and retry_after.isdigit():
+            _set_dblp_request_interval(float(retry_after))
+        else:
+            _set_dblp_request_interval(max(2.0, _dblp_request_interval * 2))
+    elif response.status_code in [500, 502, 503, 504]:
+        _set_dblp_request_interval(max(0.5, _dblp_request_interval * 1.5))
+    elif response.status_code == 200:
+        _set_dblp_request_interval(_dblp_request_interval * 0.9)
+
+
+def _request_dblp(url, *, params=None, timeout=30):
+    _pace_dblp_request()
+    try:
+        response = requests.get(url, params=params, timeout=timeout)
+    except requests.RequestException:
+        _update_dblp_request_interval(had_error=True)
+        raise
+
+    _update_dblp_request_interval(response=response)
+    return response
+
+
+def _derive_bib_url(hit):
+    info = hit.get("info", {})
+    rec_url = info.get("url")
+    key = info.get("key")
+
+    if rec_url:
+        rec_url = rec_url.rstrip("/")
+        if rec_url.endswith(".bib"):
+            return rec_url
+        return f"{rec_url}.bib"
+
+    if key:
+        return f"https://dblp.org/rec/{key}.bib"
+
+    return None
+
+
+def _parse_bibtex_entries(text):
+    bp = BibTexParser(interpolate_strings=False, common_strings=True)
+    bib = bp.parse(text)
+    return bib.entries
+
+
+def normalize_dblp_query_text(text):
+    text = bc.convert_to_unicode({"value": text}).get("value", text)
+    text = unidecode.unidecode(text)
+    text = re.sub(r"\\[a-zA-Z]+", " ", text)
+    text = text.replace("{", " ").replace("}", " ").replace('"', " ")
+    text = re.sub(r"[^0-9A-Za-z]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def build_dblp_query(entry):
+    return normalize_dblp_query_text(entry.get("title", ""))
+
+
+def _fetch_dblp_bib_entries(hit, timeout=30):
+    bib_url = _derive_bib_url(hit)
+    if bib_url is None:
+        return []
+
+    response = _request_dblp(bib_url, timeout=timeout)
+    response.raise_for_status()
+    return _parse_bibtex_entries(response.text)
+
+
+def _select_candidate_hits(hits, query, limit=3):
+    query_norm = query.lower()
+    exact_hits = []
+    fallback_hits = []
+
+    for hit in hits:
+        hit_title = normalize_dblp_query_text(hit.get("info", {}).get("title", "")).lower()
+        if not hit_title:
+            continue
+        if hit_title == query_norm:
+            exact_hits.append(hit)
+        elif query_norm in hit_title or hit_title in query_norm:
+            fallback_hits.append(hit)
+
+    if exact_hits:
+        return exact_hits[:limit]
+    if fallback_hits:
+        return fallback_hits[:limit]
+    return hits[:limit]
+
+
 def get_dblp_results(query, attempts=0):
-    params = {"format": "bib", "q": query}
-    res = requests.get(DBLP_API, params=params)
-    max_attempts = 5
-    wait_default_time = 60  # seconds
-    wait_multiply_factor = 2  # default time multiplied by this factor for each attempt
+    params = {"format": "json", "q": query, "h": 10}
+    max_attempts_429 = 5
+    wait_default_time_429 = 60  # seconds
+    wait_multiply_factor_429 = 2
+    max_attempts_5xx = 3
+    wait_default_time_5xx = 2  # seconds
+    wait_multiply_factor_5xx = 2
 
     try:
-        if res.status_code == 200:
-            # new instance needs to be created to use a new database
-            bp = BibTexParser(interpolate_strings=False, common_strings=True)
-            bib = bp.parse(res.text)
-
-            return bib.entries
-        elif res.status_code == 429 and attempts < max_attempts:
-            wait_time = wait_default_time * (wait_multiply_factor**attempts)
+        res = _request_dblp(DBLP_API, params=params, timeout=30)
+    except requests.RequestException as exc:
+        if attempts < max_attempts_5xx:
+            wait_time = wait_default_time_5xx * (wait_multiply_factor_5xx**attempts)
             log_message(
-                f"DBLP API seems overloaded, retrying again in {wait_time} seconds (attempts {attempts+1}/{max_attempts})...",
+                f"DBLP API request failed ({exc}), retrying in {wait_time} seconds (attempts {attempts+1}/{max_attempts_5xx})...",
                 "error",
                 level=logging.ERROR,
             )
             time.sleep(wait_time)
             return get_dblp_results(query, attempts + 1)
-        elif res.status_code == 429 and attempts >= max_attempts:
+
+        log_message(f"DBLP API request failed repeatedly: {exc}", "error", level=logging.ERROR)
+        return None
+
+    try:
+        if res.status_code == 200:
+            result = res.json().get("result", {})
+            hits = result.get("hits", {}).get("hit", [])
+            if isinstance(hits, dict):
+                hits = [hits]
+            candidate_hits = _select_candidate_hits(hits, query)
+
+            entries = []
+            for hit in candidate_hits:
+                try:
+                    entries.extend(_fetch_dblp_bib_entries(hit))
+                except requests.RequestException as exc:
+                    log_message(f"Could not fetch DBLP BibTeX record: {exc}", "warning", level=logging.WARNING)
+
+            return entries
+        elif res.status_code == 429 and attempts < max_attempts_429:
+            wait_time = wait_default_time_429 * (wait_multiply_factor_429**attempts)
             log_message(
-                f"DBLP API seems overloaded, please try again later. Consider also pruning your .bib file to make less requests.",
+                f"DBLP API returned status code 429, retrying in {wait_time} seconds (attempts {attempts+1}/{max_attempts_429})...",
+                "error",
+                level=logging.ERROR,
+            )
+            time.sleep(wait_time)
+            return get_dblp_results(query, attempts + 1)
+        elif res.status_code in [500, 502, 503, 504] and attempts < max_attempts_5xx:
+            wait_time = wait_default_time_5xx * (wait_multiply_factor_5xx**attempts)
+            log_message(
+                f"DBLP API returned status code {res.status_code}, retrying in {wait_time} seconds (attempts {attempts+1}/{max_attempts_5xx})...",
+                "error",
+                level=logging.ERROR,
+            )
+            time.sleep(wait_time)
+            return get_dblp_results(query, attempts + 1)
+        elif res.status_code == 429 and attempts >= max_attempts_429:
+            log_message(
+                "DBLP API is currently unavailable, please try again later. Consider also pruning your .bib file to make fewer requests.",
+                "error",
+                level=logging.ERROR,
+            )
+            return None
+        elif res.status_code in [500, 502, 503, 504] and attempts >= max_attempts_5xx:
+            log_message(
+                f"DBLP API returned status code {res.status_code} repeatedly. Skipping this query.",
                 "error",
                 level=logging.ERROR,
             )
