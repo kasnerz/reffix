@@ -70,8 +70,104 @@ class TestReffix(unittest.TestCase):
             params={"format": "json", "q": "llm2vec", "h": 10},
             timeout=30,
         )
-        get_mock.assert_any_call("https://dblp.org/rec/journals/corr/abs-2404-05961.bib", params=None, timeout=30)
+        get_mock.assert_any_call(
+            "https://dblp.org/rec/journals/corr/abs-2404-05961.bib?param=1", params=None, timeout=30
+        )
         self.assertEqual(get_mock.call_count, 2)
+
+    def test_derive_bib_url_supports_all_dblp_bibtex_formats(self):
+        hit = {
+            "info": {
+                "url": "https://dblp.org/rec/conf/inlg/DusekK20",
+            }
+        }
+
+        self.assertEqual(
+            ut._derive_bib_url(hit, bibtex_format="condensed"),
+            "https://dblp.org/rec/conf/inlg/DusekK20.bib?param=0",
+        )
+        self.assertEqual(
+            ut._derive_bib_url(hit, bibtex_format="standard"),
+            "https://dblp.org/rec/conf/inlg/DusekK20.bib?param=1",
+        )
+        self.assertEqual(
+            ut._derive_bib_url(hit, bibtex_format="crossref"),
+            "https://dblp.org/rec/conf/inlg/DusekK20.bib?param=2",
+        )
+
+    @patch("reffix.reffix.ut.get_dblp_results", return_value=[])
+    def test_process_passes_selected_dblp_bibtex_format(self, get_dblp_results_mock):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_file = os.path.join(temp_dir, "test.fixed.bib")
+
+            reffix.process(
+                "tests/test.bib",
+                out_file,
+                replace_arxiv=False,
+                dblp_bibtex_format="crossref",
+                force_titlecase=False,
+                interact=False,
+                no_publisher=False,
+                process_conf_loc=False,
+            )
+
+        self.assertTrue(get_dblp_results_mock.called)
+        _, kwargs = get_dblp_results_mock.call_args
+        self.assertEqual(kwargs["bibtex_format"], "crossref")
+
+    @patch("reffix.utils.requests.get")
+    def test_crossref_bibtex_fetch_keeps_matching_paper_entry(self, get_mock):
+        search_response = Mock()
+        search_response.status_code = 200
+        search_response.json.return_value = {
+            "result": {
+                "hits": {
+                    "hit": [
+                        {
+                            "info": {
+                                "key": "conf/inlg/DusekK20",
+                                "url": "https://dblp.org/rec/conf/inlg/DusekK20",
+                                "title": "Evaluating Semantic Accuracy of Data-to-Text Generation with Natural Language Inference",
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+
+        bib_response = Mock()
+        bib_response.raise_for_status.return_value = None
+        bib_response.text = """@inproceedings{DusekK20,
+  author    = {Ondrej Dusek and Zdenek Kasner},
+  title     = {Evaluating Semantic Accuracy of Data-to-Text Generation with Natural Language Inference},
+  crossref  = {conf/inlg/2020}
+}
+
+@proceedings{conf/inlg/2020,
+  title     = {Proceedings of the 13th International Conference on Natural Language Generation}
+}"""
+
+        get_mock.side_effect = [search_response, bib_response]
+
+        results = ut.get_dblp_results(
+            "Evaluating semantic accuracy of data-to-text generation with natural language inference",
+            bibtex_format="crossref",
+        )
+        selected = reffix.select_entry(
+            results,
+            {
+                "title": "Evaluating semantic accuracy of data-to-text generation with natural language inference",
+                "author": "Du{\\v{s}}ek, Ond{\\v{r}}ej and Kasner, Zden{\\v{e}}k",
+            },
+            replace_arxiv=False,
+        )
+
+        self.assertEqual(len(results), 2)
+        self.assertEqual(selected["ID"], "DusekK20")
+        self.assertEqual(selected["crossref"], "conf/inlg/2020")
+        get_mock.assert_any_call(
+            "https://dblp.org/rec/conf/inlg/DusekK20.bib?param=2", params=None, timeout=30
+        )
 
     @patch("reffix.utils.time.sleep")
     @patch("reffix.utils.requests.get")
@@ -236,6 +332,7 @@ class TestReffix(unittest.TestCase):
                     "tests/test.bib",
                     out_file,
                     replace_arxiv=False,
+                    dblp_bibtex_format="standard",
                     force_titlecase=False,
                     interact=False,
                     no_publisher=False,
@@ -247,6 +344,7 @@ class TestReffix(unittest.TestCase):
                     "tests/test.bib",
                     out_arxiv_file,
                     replace_arxiv=True,
+                    dblp_bibtex_format="standard",
                     force_titlecase=False,
                     interact=False,
                     no_publisher=False,

@@ -23,6 +23,11 @@ DBLP_MIN_REQUEST_INTERVAL = 0.2
 DBLP_MAX_REQUEST_INTERVAL = 10.0
 _dblp_request_interval = DBLP_MIN_REQUEST_INTERVAL
 _dblp_last_request_at = 0.0
+DBLP_BIBTEX_FORMAT_PARAMS = {
+    "condensed": "0",
+    "standard": "1",
+    "crossref": "2",
+}
 
 DATE_REGEX = (
     r"([1-3]?[0-9](?:st|rd|nd|th)?((?: *[-–] *)[1-3]?[0-9](?:st|rd|nd|th)?)?) "
@@ -120,19 +125,20 @@ def _request_dblp(url, *, params=None, timeout=30):
     return response
 
 
-def _derive_bib_url(hit):
+def _derive_bib_url(hit, bibtex_format="standard"):
     info = hit.get("info", {})
     rec_url = info.get("url")
     key = info.get("key")
+    param = DBLP_BIBTEX_FORMAT_PARAMS[bibtex_format]
 
     if rec_url:
         rec_url = rec_url.rstrip("/")
         if rec_url.endswith(".bib"):
-            return rec_url
-        return f"{rec_url}.bib"
+            return f"{rec_url}?param={param}"
+        return f"{rec_url}.bib?param={param}"
 
     if key:
-        return f"https://dblp.org/rec/{key}.bib"
+        return f"https://dblp.org/rec/{key}.bib?param={param}"
 
     return None
 
@@ -156,8 +162,8 @@ def build_dblp_query(entry):
     return normalize_dblp_query_text(entry.get("title", ""))
 
 
-def _fetch_dblp_bib_entries(hit, timeout=30):
-    bib_url = _derive_bib_url(hit)
+def _fetch_dblp_bib_entries(hit, bibtex_format="standard", timeout=30):
+    bib_url = _derive_bib_url(hit, bibtex_format=bibtex_format)
     if bib_url is None:
         return []
 
@@ -187,7 +193,7 @@ def _select_candidate_hits(hits, query, limit=3):
     return hits[:limit]
 
 
-def get_dblp_results(query, attempts=0):
+def get_dblp_results(query, bibtex_format="standard", attempts=0):
     params = {"format": "json", "q": query, "h": 10}
     max_attempts_429 = 5
     wait_default_time_429 = 60  # seconds
@@ -207,7 +213,7 @@ def get_dblp_results(query, attempts=0):
                 level=logging.ERROR,
             )
             time.sleep(wait_time)
-            return get_dblp_results(query, attempts + 1)
+            return get_dblp_results(query, bibtex_format=bibtex_format, attempts=attempts + 1)
 
         log_message(f"DBLP API request failed repeatedly: {exc}", "error", level=logging.ERROR)
         return None
@@ -223,7 +229,7 @@ def get_dblp_results(query, attempts=0):
             entries = []
             for hit in candidate_hits:
                 try:
-                    entries.extend(_fetch_dblp_bib_entries(hit))
+                    entries.extend(_fetch_dblp_bib_entries(hit, bibtex_format=bibtex_format))
                 except requests.RequestException as exc:
                     log_message(f"Could not fetch DBLP BibTeX record: {exc}", "warning", level=logging.WARNING)
 
@@ -236,7 +242,7 @@ def get_dblp_results(query, attempts=0):
                 level=logging.ERROR,
             )
             time.sleep(wait_time)
-            return get_dblp_results(query, attempts + 1)
+            return get_dblp_results(query, bibtex_format=bibtex_format, attempts=attempts + 1)
         elif res.status_code in [500, 502, 503, 504] and attempts < max_attempts_5xx:
             wait_time = wait_default_time_5xx * (wait_multiply_factor_5xx**attempts)
             log_message(
@@ -245,7 +251,7 @@ def get_dblp_results(query, attempts=0):
                 level=logging.ERROR,
             )
             time.sleep(wait_time)
-            return get_dblp_results(query, attempts + 1)
+            return get_dblp_results(query, bibtex_format=bibtex_format, attempts=attempts + 1)
         elif res.status_code == 429 and attempts >= max_attempts_429:
             log_message(
                 "DBLP API is currently unavailable, please try again later. Consider also pruning your .bib file to make fewer requests.",

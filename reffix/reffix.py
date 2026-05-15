@@ -106,6 +106,7 @@ def process(
     in_file,
     out_file,
     replace_arxiv,
+    dblp_bibtex_format,
     force_titlecase,
     interact,
     no_publisher,
@@ -135,7 +136,7 @@ def process(
 
                 query = ut.build_dblp_query(orig_entry)
 
-                entries = ut.get_dblp_results(query)
+                entries = ut.get_dblp_results(query, bibtex_format=dblp_bibtex_format)
                 entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)
 
                 if entry is not None:
@@ -223,6 +224,12 @@ def cli():
         help="Try to use a non-arXiv version whenever possible",
     )
     parser.add_argument(
+        "--dblp-bibtex-format",
+        choices=["condensed", "standard", "crossref"],
+        default="standard",
+        help="Choose which DBLP BibTeX export form to fetch for matching records.",
+    )
+    parser.add_argument(
         "-t",
         "--force-titlecase",
         action="store_true",
@@ -280,6 +287,7 @@ def cli():
         in_file=args.input,
         out_file=out_file,
         replace_arxiv=args.replace_arxiv,
+        dblp_bibtex_format=args.dblp_bibtex_format,
         force_titlecase=args.force_titlecase,
         interact=args.interact,
         no_publisher=args.no_publisher,
