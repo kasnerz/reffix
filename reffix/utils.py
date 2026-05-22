@@ -19,8 +19,11 @@ logging.basicConfig(format="%(message)s", level=logging.INFO, datefmt="%H:%M:%S"
 logger = logging.getLogger(__name__)
 
 DBLP_API = "https://dblp.org/search/publ/api"
-DBLP_MIN_REQUEST_INTERVAL = 0.2
-DBLP_MAX_REQUEST_INTERVAL = 10.0
+DBLP_HEADERS = {
+    "User-Agent": "reffix/1.3.1 (+https://github.com/kasnerz/reffix)",
+}
+DBLP_MIN_REQUEST_INTERVAL = 1.0
+DBLP_MAX_REQUEST_INTERVAL = 300.0
 _dblp_request_interval = DBLP_MIN_REQUEST_INTERVAL
 _dblp_last_request_at = 0.0
 DBLP_BIBTEX_FORMAT_PARAMS = {
@@ -113,16 +116,98 @@ def _update_dblp_request_interval(response=None, had_error=False):
         _set_dblp_request_interval(_dblp_request_interval * 0.9)
 
 
-def _request_dblp(url, *, params=None, timeout=30):
-    _pace_dblp_request()
-    try:
-        response = requests.get(url, params=params, timeout=timeout)
-    except requests.RequestException:
-        _update_dblp_request_interval(had_error=True)
-        raise
+def _get_dblp_retry_wait_time(response, default_wait_time, multiplier, attempt):
+    headers = getattr(response, "headers", {}) or {}
+    retry_after = headers.get("Retry-After") if hasattr(headers, "get") else None
+    if isinstance(retry_after, (int, float)):
+        return float(retry_after)
+    if isinstance(retry_after, str) and retry_after.isdigit():
+        return float(retry_after)
 
-    _update_dblp_request_interval(response=response)
-    return response
+    return default_wait_time * (multiplier**attempt)
+
+
+def _request_dblp(
+    url,
+    *,
+    params=None,
+    timeout=30,
+    max_attempts_429=5,
+    wait_default_time_429=60,
+    wait_multiply_factor_429=2,
+    max_attempts_5xx=3,
+    wait_default_time_5xx=2,
+    wait_multiply_factor_5xx=2,
+):
+    attempts_429 = 0
+    attempts_5xx = 0
+
+    while True:
+        _pace_dblp_request()
+        try:
+            response = requests.get(url, params=params, timeout=timeout, headers=DBLP_HEADERS)
+        except requests.RequestException as exc:
+            _update_dblp_request_interval(had_error=True)
+            rate_limited = attempts_429 > 0 or _dblp_request_interval >= wait_default_time_429
+            if rate_limited and attempts_429 < max_attempts_429:
+                wait_time = max(_dblp_request_interval, wait_default_time_429)
+                attempts_429 += 1
+                _set_dblp_request_interval(wait_time)
+                log_message(
+                    f"DBLP API request failed ({exc}), retrying in {wait_time:g} seconds (attempts {attempts_429}/{max_attempts_429})...",
+                    "error",
+                    level=logging.ERROR,
+                )
+                time.sleep(wait_time)
+                continue
+            if attempts_5xx < max_attempts_5xx:
+                wait_time = wait_default_time_5xx * (wait_multiply_factor_5xx**attempts_5xx)
+                attempts_5xx += 1
+                log_message(
+                    f"DBLP API request failed ({exc}), retrying in {wait_time} seconds (attempts {attempts_5xx}/{max_attempts_5xx})...",
+                    "error",
+                    level=logging.ERROR,
+                )
+                time.sleep(wait_time)
+                continue
+            raise
+
+        _update_dblp_request_interval(response=response)
+
+        if response.status_code == 429 and attempts_429 < max_attempts_429:
+            wait_time = _get_dblp_retry_wait_time(
+                response,
+                wait_default_time_429,
+                wait_multiply_factor_429,
+                attempts_429,
+            )
+            attempts_429 += 1
+            _set_dblp_request_interval(wait_time)
+            log_message(
+                f"DBLP API returned status code 429, retrying in {wait_time:g} seconds (attempts {attempts_429}/{max_attempts_429})...",
+                "error",
+                level=logging.ERROR,
+            )
+            time.sleep(wait_time)
+            continue
+
+        if response.status_code in [500, 502, 503, 504] and attempts_5xx < max_attempts_5xx:
+            wait_time = _get_dblp_retry_wait_time(
+                response,
+                wait_default_time_5xx,
+                wait_multiply_factor_5xx,
+                attempts_5xx,
+            )
+            attempts_5xx += 1
+            log_message(
+                f"DBLP API returned status code {response.status_code}, retrying in {wait_time:g} seconds (attempts {attempts_5xx}/{max_attempts_5xx})...",
+                "error",
+                level=logging.ERROR,
+            )
+            time.sleep(wait_time)
+            continue
+
+        return response
 
 
 def _derive_bib_url(hit, bibtex_format="standard"):
@@ -172,7 +257,7 @@ def _fetch_dblp_bib_entries(hit, bibtex_format="standard", timeout=30):
     return _parse_bibtex_entries(response.text)
 
 
-def _select_candidate_hits(hits, query, limit=3):
+def _select_candidate_hits(hits, query, exact_limit=1, fallback_limit=2, limit=3):
     query_norm = query.lower()
     exact_hits = []
     fallback_hits = []
@@ -187,34 +272,18 @@ def _select_candidate_hits(hits, query, limit=3):
             fallback_hits.append(hit)
 
     if exact_hits:
-        return exact_hits[:limit]
+        return exact_hits[:exact_limit]
     if fallback_hits:
-        return fallback_hits[:limit]
+        return fallback_hits[:fallback_limit]
     return hits[:limit]
 
 
-def get_dblp_results(query, bibtex_format="standard", attempts=0):
+def get_dblp_results(query, bibtex_format="standard"):
     params = {"format": "json", "q": query, "h": 10}
-    max_attempts_429 = 5
-    wait_default_time_429 = 60  # seconds
-    wait_multiply_factor_429 = 2
-    max_attempts_5xx = 3
-    wait_default_time_5xx = 2  # seconds
-    wait_multiply_factor_5xx = 2
 
     try:
         res = _request_dblp(DBLP_API, params=params, timeout=30)
     except requests.RequestException as exc:
-        if attempts < max_attempts_5xx:
-            wait_time = wait_default_time_5xx * (wait_multiply_factor_5xx**attempts)
-            log_message(
-                f"DBLP API request failed ({exc}), retrying in {wait_time} seconds (attempts {attempts+1}/{max_attempts_5xx})...",
-                "error",
-                level=logging.ERROR,
-            )
-            time.sleep(wait_time)
-            return get_dblp_results(query, bibtex_format=bibtex_format, attempts=attempts + 1)
-
         log_message(f"DBLP API request failed repeatedly: {exc}", "error", level=logging.ERROR)
         return None
 
@@ -234,32 +303,14 @@ def get_dblp_results(query, bibtex_format="standard", attempts=0):
                     log_message(f"Could not fetch DBLP BibTeX record: {exc}", "warning", level=logging.WARNING)
 
             return entries
-        elif res.status_code == 429 and attempts < max_attempts_429:
-            wait_time = wait_default_time_429 * (wait_multiply_factor_429**attempts)
-            log_message(
-                f"DBLP API returned status code 429, retrying in {wait_time} seconds (attempts {attempts+1}/{max_attempts_429})...",
-                "error",
-                level=logging.ERROR,
-            )
-            time.sleep(wait_time)
-            return get_dblp_results(query, bibtex_format=bibtex_format, attempts=attempts + 1)
-        elif res.status_code in [500, 502, 503, 504] and attempts < max_attempts_5xx:
-            wait_time = wait_default_time_5xx * (wait_multiply_factor_5xx**attempts)
-            log_message(
-                f"DBLP API returned status code {res.status_code}, retrying in {wait_time} seconds (attempts {attempts+1}/{max_attempts_5xx})...",
-                "error",
-                level=logging.ERROR,
-            )
-            time.sleep(wait_time)
-            return get_dblp_results(query, bibtex_format=bibtex_format, attempts=attempts + 1)
-        elif res.status_code == 429 and attempts >= max_attempts_429:
+        elif res.status_code == 429:
             log_message(
                 "DBLP API is currently unavailable, please try again later. Consider also pruning your .bib file to make fewer requests.",
                 "error",
                 level=logging.ERROR,
             )
             return None
-        elif res.status_code in [500, 502, 503, 504] and attempts >= max_attempts_5xx:
+        elif res.status_code in [500, 502, 503, 504]:
             log_message(
                 f"DBLP API returned status code {res.status_code} repeatedly. Skipping this query.",
                 "error",
