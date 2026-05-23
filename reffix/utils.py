@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DBLP_API = "https://dblp.org/search/publ/api"
 DBLP_HEADERS = {
-    "User-Agent": "reffix/1.3.1 (+https://github.com/kasnerz/reffix)",
+    "User-Agent": "reffix/1.3.2 (+https://github.com/kasnerz/reffix)",
 }
 DBLP_MIN_REQUEST_INTERVAL = 1.0
 DBLP_MAX_REQUEST_INTERVAL = 300.0
@@ -229,7 +229,7 @@ def _derive_bib_url(hit, bibtex_format="standard"):
 
 
 def _parse_bibtex_entries(text):
-    bp = BibTexParser(interpolate_strings=False, common_strings=True)
+    bp = BibTexParser(interpolate_strings=False, common_strings=True, ignore_nonstandard_types=False)
     bib = bp.parse(text)
     return bib.entries
 

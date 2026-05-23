@@ -392,10 +392,45 @@ class TestReffix(unittest.TestCase):
                 self.assertTrue(os.path.exists(out_arxiv_file))
 
             # check if we can parse the output file
-            bp = BibTexParser(interpolate_strings=False, common_strings=True)
+            bp = BibTexParser(interpolate_strings=False, common_strings=True, ignore_nonstandard_types=False)
 
             with open(out_arxiv_file) as bibtex_file:
                 bibtexparser.load(bibtex_file, parser=bp)
+
+    def test_process_preserves_online_entries_and_total_count(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            out_file = os.path.join(temp_dir, "main.fixed.bib")
+
+            with patch("reffix.reffix.ut.get_dblp_results", return_value=[]):
+                reffix.process(
+                    "tests/main.bib",
+                    out_file,
+                    replace_arxiv=False,
+                    dblp_bibtex_format="standard",
+                    force_titlecase=False,
+                    interact=False,
+                    no_publisher=False,
+                    process_conf_loc=False,
+                )
+
+            bp = BibTexParser(interpolate_strings=False, common_strings=True, ignore_nonstandard_types=False)
+            with open("tests/main.bib") as input_bibtex_file:
+                original_db = bibtexparser.load(input_bibtex_file, parser=bp)
+
+            with open(out_file) as output_bibtex_file:
+                output_text = output_bibtex_file.read()
+
+            output_db = bibtexparser.loads(
+                output_text,
+                parser=BibTexParser(interpolate_strings=False, common_strings=True, ignore_nonstandard_types=False),
+            )
+
+            original_online_ids = {entry["ID"] for entry in original_db.entries if entry.get("ENTRYTYPE") == "online"}
+            output_online_ids = {entry["ID"] for entry in output_db.entries if entry.get("ENTRYTYPE") == "online"}
+
+            self.assertEqual(len(output_db.entries), len(original_db.entries))
+            self.assertEqual(output_online_ids, original_online_ids)
+            self.assertIn("@online{", output_text.lower())
 
     @patch("reffix.reffix.importlib.util.find_spec")
     @patch("reffix.reffix.importlib.invalidate_caches")

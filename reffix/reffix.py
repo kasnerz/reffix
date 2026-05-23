@@ -117,7 +117,7 @@ def process(
     if process_conf_loc:
         nlp = _ensure_spacy_nlp()
 
-    bp = BibTexParser(interpolate_strings=False, common_strings=True)
+    bp = BibTexParser(interpolate_strings=False, common_strings=True, ignore_nonstandard_types=False)
 
     with open(in_file) as bibtex_file:
         bib_database = bibtexparser.load(bibtex_file, parser=bp)
