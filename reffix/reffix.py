@@ -29,6 +29,7 @@ import subprocess
 import sys
 
 from . import utils as ut
+from .local_dblp import LocalDblp
 
 from bibtexparser.bparser import BibTexParser
 import bibtexparser.customization as bc
@@ -113,9 +114,15 @@ def process(
     process_conf_loc,
     order_entries_by=None,
     use_formatter=True,
+    dblp_xml=None,
 ):
     if process_conf_loc:
         nlp = _ensure_spacy_nlp()
+
+    local_dblp = None
+    if dblp_xml is not None:
+        local_dblp = LocalDblp(dblp_xml)
+        ut.log_message("Using the local DBLP dump, the DBLP API will not be queried.", "info")
 
     bp = BibTexParser(interpolate_strings=False, common_strings=True, ignore_nonstandard_types=False)
 
@@ -136,7 +143,10 @@ def process(
 
                 query = ut.build_dblp_query(orig_entry)
 
-                entries = ut.get_dblp_results(query, bibtex_format=dblp_bibtex_format)
+                if local_dblp is not None:
+                    entries = local_dblp.search(query)
+                else:
+                    entries = ut.get_dblp_results(query, bibtex_format=dblp_bibtex_format)
                 entry = select_entry(entries, orig_entry=orig_entry, replace_arxiv=replace_arxiv)
 
                 if entry is not None:
@@ -230,6 +240,15 @@ def cli():
         help="Choose which DBLP BibTeX export form to fetch for matching records.",
     )
     parser.add_argument(
+        "--dblp-xml",
+        type=str,
+        default=None,
+        help="Path to a local DBLP XML dump (dblp.xml or dblp.xml.gz, see "
+        "https://dblp.uni-trier.de/faq/1474679.html, with dblp.dtd in the same directory). "
+        "A search index is built once next to the file; afterwards, all queries run locally "
+        "instead of against the DBLP API.",
+    )
+    parser.add_argument(
         "-t",
         "--force-titlecase",
         action="store_true",
@@ -294,6 +313,7 @@ def cli():
         process_conf_loc=args.process_conf_loc,
         order_entries_by=args.sort_by,
         use_formatter=not args.no_formatting,
+        dblp_xml=args.dblp_xml,
     )
 
 

@@ -9,3 +9,10 @@ env/
 *.log
 .venv
 .vscode
+
+# local DBLP dump and its search index
+dblp.xml
+dblp.xml.gz
+dblp.dtd
+*.sqlite
+*.sqlite.tmp
