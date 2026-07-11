@@ -39,6 +39,26 @@ DBLP_XML_FIXTURE = """<?xml version="1.0" encoding="ISO-8859-1"?>
 <publisher>Association for Computational Linguistics</publisher>
 <year>2020</year>
 </proceedings>
+<book mdate="2021-01-01" key="books/sp/NocedalW99">
+<author>Jorge Nocedal</author>
+<author>Stephen J. Wright</author>
+<title>Numerical Optimization</title>
+<pages>1-636</pages>
+<year>1999</year>
+<publisher>Springer</publisher>
+<isbn>978-0-387-98793-4</isbn>
+<isbn>978-0-387-22742-9</isbn>
+<ee>https://doi.org/10.1007/b98874</ee>
+<ee>https://nbn-resolving.org/urn:nbn:de:test-123</ee>
+</book>
+<phdthesis mdate="2021-07-17" key="phd/dnb/Varnik11">
+<author>Ebadollah Varnik</author>
+<title>Exploitation of structural sparsity in algorithmic differentiation.</title>
+<year>2011</year>
+<pages>1-145</pages>
+<school>RWTH Aachen University</school>
+<ee>http://darwin.example.org/3847.pdf</ee>
+</phdthesis>
 </dblp>
 """
 
@@ -548,7 +568,10 @@ class TestReffix(unittest.TestCase):
                 "Proceedings of the 13th International Conference on Natural Language Generation, INLG 2020",
             )
             self.assertEqual(entry["publisher"], "Association for Computational Linguistics")
+            # the proceedings editors are inlined as well
+            self.assertEqual(entry["editor"], "Brian Davis")
             self.assertEqual(entry["timestamp"], "2023-05-02")
+            self.assertEqual(entry["bibsource"], "dblp computer science bibliography, https://dblp.org")
             # the proceedings entry is not part of the output, so no crossref
             # may be emitted (BibTeX rejects dangling crossrefs)
             self.assertNotIn("crossref", entry)
@@ -559,10 +582,70 @@ class TestReffix(unittest.TestCase):
 
             # homonym suffixes are stripped and DTD entities are resolved
             self.assertEqual(entry["author"], "Parishad BehnamGhader and Kalervo Järvelin")
+            # CoRR articles carry the arXiv identifier, as in the API exports
+            self.assertEqual(entry["eprinttype"], "arXiv")
+            self.assertEqual(entry["eprint"], "2404.05961")
             self.assertTrue(ut.is_arxiv(entry))
+
+            results = local_dblp.search("numerical optimization")
+            self.assertEqual(len(results), 1)
+            entry = results[0]
+
+            self.assertEqual(entry["ENTRYTYPE"], "book")
+            # of multiple isbn elements (one per edition), the first is kept
+            self.assertEqual(entry["isbn"], "978-0-387-98793-4")
+            self.assertEqual(entry["url"], "https://doi.org/10.1007/b98874")
+            self.assertEqual(entry["doi"], "10.1007/B98874")
+            self.assertEqual(entry["urn"], "urn:nbn:de:test-123")
+            # the API exports omit the page count and booktitle of monographs
+            self.assertNotIn("pages", entry)
+            self.assertNotIn("booktitle", entry)
+
+            results = local_dblp.search("exploitation of structural sparsity in algorithmic differentiation")
+            self.assertEqual(len(results), 1)
+            entry = results[0]
+
+            self.assertEqual(entry["ENTRYTYPE"], "phdthesis")
+            self.assertEqual(entry["school"], "RWTH Aachen University")
+            # the API exports omit the page count of theses as well
+            self.assertNotIn("pages", entry)
 
             self.assertEqual(local_dblp.search("no such publication anywhere"), [])
             local_dblp.close()
+
+    def test_local_dblp_reads_gzipped_dump(self):
+        import gzip
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            xml_file = write_dblp_fixture(temp_dir)
+            gz_file = xml_file + ".gz"
+            with open(xml_file, "rb") as f_in, gzip.open(gz_file, "wb") as f_out:
+                f_out.write(f_in.read())
+            os.remove(xml_file)
+
+            local_dblp = LocalDblp(gz_file)
+            results = local_dblp.search("numerical optimization")
+            local_dblp.close()
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["ID"], "books/sp/NocedalW99")
+
+    def test_select_entry_matches_titles_across_latex_and_unicode(self):
+        # entries from the local DBLP dump carry unicode titles, while BibTeX
+        # files typically encode accents in LaTeX; both must match
+        orig_entry = {
+            "title": 'Gr{\\"o}bner Bases and Applications',
+            "author": "Doe, John",
+        }
+        candidate = {
+            "title": "Gröbner Bases and Applications",
+            "author": "John Doe",
+            "year": "1998",
+        }
+
+        selected = reffix.select_entry([candidate], orig_entry, replace_arxiv=False)
+
+        self.assertEqual(selected, candidate)
 
     def test_local_dblp_reuses_cached_index(self):
         with tempfile.TemporaryDirectory() as temp_dir:

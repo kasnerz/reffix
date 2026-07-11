@@ -30,7 +30,9 @@ from .utils import log_message
 
 logger = logging.getLogger(__name__)
 
-INDEX_SCHEMA_VERSION = 2
+INDEX_SCHEMA_VERSION = 4
+
+DBLP_BIBSOURCE = "dblp computer science bibliography, https://dblp.org"
 
 # publication record types of the DBLP XML that map directly to BibTeX entry types
 RECORD_TYPES = {
@@ -57,6 +59,7 @@ FIELD_TAGS = {
     "publisher",
     "school",
     "series",
+    "isbn",
 }
 
 # DBLP disambiguates homonymous authors with a numeric suffix ("Wei Wang 0001");
@@ -130,7 +133,9 @@ class _DblpRecordHandler(xml.sax.handler.ContentHandler):
                 elif name == "ee":
                     self.record["ees"].append(value)
                 else:
-                    self.record[name] = value
+                    # some fields appear multiple times (e.g. one isbn per
+                    # edition); like the BibTeX exports of the API, keep the first
+                    self.record.setdefault(name, value)
             self.field = None
         elif name in RECORD_TYPES and name == self.record["type"]:
             if self.record["key"]:
@@ -150,15 +155,19 @@ def _record_to_row(record):
         pages = re.sub(r"(?<=[0-9a-zA-Z])-(?=[0-9a-zA-Z])", "--", pages)
 
     # like the BibTeX exports of the API: the first electronic edition becomes
-    # the url, and a DOI link among them additionally yields the doi field
+    # the url, while DOI and URN links among them additionally yield the doi
+    # and urn fields
     ees = record["ees"]
     url = ees[0] if ees else ""
     doi = ""
+    urn = ""
     for ee in ees:
-        match = re.search(r"doi\.org/(.+)$", ee)
-        if match:
-            doi = match.group(1).upper()
-            break
+        doi_match = re.search(r"doi\.org/(.+)$", ee)
+        if doi_match and not doi:
+            doi = doi_match.group(1).upper()
+        urn_match = re.search(r"nbn-resolving\.(?:org|de)/(.+)$", ee)
+        if urn_match and not urn:
+            urn = urn_match.group(1)
 
     return (
         record["key"],
@@ -176,16 +185,18 @@ def _record_to_row(record):
         record.get("publisher", ""),
         record.get("school", ""),
         record.get("series", ""),
+        record.get("isbn", ""),
         record.get("crossref", ""),
         url,
         doi,
+        urn,
         _normalize_title(title),
     )
 
 
 ROW_COLUMNS = (
     "key, type, mdate, title, author, editor, year, pages, journal, "
-    "booktitle, volume, number, publisher, school, series, crossref, url, doi, title_norm"
+    "booktitle, volume, number, publisher, school, series, isbn, crossref, url, doi, urn, title_norm"
 )
 
 
@@ -252,14 +263,14 @@ class LocalDblp:
             """CREATE TABLE pubs (
                 key TEXT PRIMARY KEY, type TEXT, mdate TEXT, title TEXT, author TEXT, editor TEXT,
                 year TEXT, pages TEXT, journal TEXT, booktitle TEXT, volume TEXT, number TEXT,
-                publisher TEXT, school TEXT, series TEXT, crossref TEXT, url TEXT, doi TEXT,
-                title_norm TEXT
+                publisher TEXT, school TEXT, series TEXT, isbn TEXT, crossref TEXT, url TEXT,
+                doi TEXT, urn TEXT, title_norm TEXT
             )"""
         )
 
         batch = []
         counter = {"records": 0}
-        placeholders = ", ".join("?" * 19)
+        placeholders = ", ".join("?" * 21)
 
         def insert_record(record):
             batch.append(_record_to_row(record))
@@ -310,10 +321,24 @@ class LocalDblp:
             # allows sorting DBLP results by recency, mirroring the API exports
             "timestamp": record["mdate"],
             "biburl": f"https://dblp.org/rec/{record['key']}.bib",
+            "bibsource": DBLP_BIBSOURCE,
         }
-        for field in ("author", "editor", "year", "pages", "journal", "booktitle", "volume", "number", "publisher", "school", "series", "url", "doi"):
+        for field in ("author", "editor", "year", "pages", "journal", "booktitle", "volume", "number", "publisher", "school", "series", "isbn", "url", "doi", "urn"):
             if record[field]:
                 entry[field] = record[field]
+
+        # the API exports omit the page count for entry types that have no
+        # pages field in standard BibTeX, and the booktitle of monographs
+        if record["type"] in ("book", "proceedings", "phdthesis", "mastersthesis"):
+            entry.pop("pages", None)
+        if record["type"] == "book":
+            entry.pop("booktitle", None)
+
+        # arXiv preprints are indexed as CoRR articles; the API exports expose
+        # the arXiv identifier in the eprint fields
+        if record["journal"] == "CoRR" and record["volume"].startswith("abs/"):
+            entry["eprinttype"] = "arXiv"
+            entry["eprint"] = record["volume"][len("abs/") :]
 
         # resolve the crossref to the proceedings record to obtain the full venue
         # name, mirroring the "standard" BibTeX export format of the API
@@ -328,7 +353,7 @@ class LocalDblp:
                 # not part of the output and BibTeX rejects dangling crossrefs
                 if parent_record["title"]:
                     entry["booktitle"] = parent_record["title"]
-                for field in ("publisher", "series", "volume"):
+                for field in ("editor", "publisher", "series", "volume"):
                     if parent_record[field] and not entry.get(field):
                         entry[field] = parent_record[field]
 
@@ -345,10 +370,11 @@ class LocalDblp:
             return []
 
         match_query = " ".join('"{}"'.format(word.replace('"', "")) for word in words)
+        qualified_columns = ", ".join(f"pubs.{column.strip()}" for column in ROW_COLUMNS.split(","))
         try:
             rows = self.conn.execute(
-                f"SELECT {ROW_COLUMNS} FROM pubs WHERE rowid IN "
-                "(SELECT rowid FROM pubs_fts WHERE pubs_fts MATCH ? ORDER BY bm25(pubs_fts) LIMIT ?)",
+                f"SELECT {qualified_columns} FROM pubs_fts JOIN pubs ON pubs.rowid = pubs_fts.rowid "
+                "WHERE pubs_fts MATCH ? ORDER BY rank LIMIT ?",
                 (match_query, limit),
             ).fetchall()
         except sqlite3.OperationalError as e:
