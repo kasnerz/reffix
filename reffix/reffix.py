@@ -27,6 +27,7 @@ import re
 import pprint
 import subprocess
 import sys
+import unidecode
 
 from . import utils as ut
 from .local_dblp import LocalDblp
@@ -66,13 +67,15 @@ def select_entry(entries, orig_entry, replace_arxiv):
 
     matching_entries = []
     # keep only entries with matching title, ignoring casing and non-alpha numeric characters
-    # (some titles are returned with trailing dot, dashes may be inconsistent, etc.)
-    orig_title = re.sub(r"[^0-9a-zA-Z]+", "", orig_entry["title"]).lower()
+    # (some titles are returned with trailing dot, dashes may be inconsistent, etc.);
+    # transliterating first keeps accented characters comparable across their
+    # LaTeX and unicode representations
+    orig_title = re.sub(r"[^0-9a-zA-Z]+", "", unidecode.unidecode(orig_entry["title"])).lower()
     orig_authors = ut.get_authors_canonical(orig_entry)
 
     # try to find if any entry is better than the original one
     for entry in entries:
-        title = re.sub(r"[^0-9a-zA-Z]+", "", entry["title"]).lower()
+        title = re.sub(r"[^0-9a-zA-Z]+", "", unidecode.unidecode(entry["title"])).lower()
 
         # skip entries with no authors
         if "author" not in entry:
