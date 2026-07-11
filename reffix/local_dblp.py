@@ -323,13 +323,14 @@ class LocalDblp:
             ).fetchone()
             if parent is not None:
                 parent_record = dict(zip(columns, parent))
-                # the short venue name is replaced with the full proceedings title
+                # the short venue name is replaced with the full proceedings title;
+                # the crossref itself is not kept, since the proceedings entry is
+                # not part of the output and BibTeX rejects dangling crossrefs
                 if parent_record["title"]:
                     entry["booktitle"] = parent_record["title"]
                 for field in ("publisher", "series", "volume"):
                     if parent_record[field] and not entry.get(field):
                         entry[field] = parent_record[field]
-                entry["crossref"] = record["crossref"]
 
         return entry
 

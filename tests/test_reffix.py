@@ -549,6 +549,9 @@ class TestReffix(unittest.TestCase):
             )
             self.assertEqual(entry["publisher"], "Association for Computational Linguistics")
             self.assertEqual(entry["timestamp"], "2023-05-02")
+            # the proceedings entry is not part of the output, so no crossref
+            # may be emitted (BibTeX rejects dangling crossrefs)
+            self.assertNotIn("crossref", entry)
 
             results = local_dblp.search("llm2vec large language models are secretly powerful text encoders")
             self.assertEqual(len(results), 1)
