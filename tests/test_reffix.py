@@ -6,8 +6,74 @@ from unittest.mock import patch, Mock
 import requests
 import reffix.reffix as reffix
 import reffix.utils as ut
+from reffix.local_dblp import LocalDblp
 import bibtexparser
 from bibtexparser.bparser import BibTexParser
+
+DBLP_XML_FIXTURE = """<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE dblp SYSTEM "dblp.dtd">
+<dblp>
+<article mdate="2024-06-01" key="journals/corr/abs-2404-05961">
+<author>Parishad BehnamGhader 0001</author>
+<author>Kalervo J&auml;rvelin</author>
+<title>LLM2Vec: Large Language Models Are Secretly Powerful Text Encoders.</title>
+<year>2024</year>
+<journal>CoRR</journal>
+<volume>abs/2404.05961</volume>
+<ee type="oa">https://arxiv.org/abs/2404.05961</ee>
+</article>
+<inproceedings mdate="2023-05-02" key="conf/inlg/DusekK20">
+<author>Ondrej Dusek</author>
+<author>Zdenek Kasner</author>
+<title>Evaluating Semantic Accuracy of Data-to-Text Generation with <i>Natural Language Inference</i>.</title>
+<pages>131-137</pages>
+<year>2020</year>
+<crossref>conf/inlg/2020</crossref>
+<booktitle>INLG</booktitle>
+<ee>https://aclanthology.org/2020.inlg-1.19/</ee>
+<ee>https://doi.org/10.18653/v1/2020.inlg-1.19</ee>
+</inproceedings>
+<proceedings mdate="2022-01-01" key="conf/inlg/2020">
+<editor>Brian Davis</editor>
+<title>Proceedings of the 13th International Conference on Natural Language Generation, INLG 2020</title>
+<publisher>Association for Computational Linguistics</publisher>
+<year>2020</year>
+</proceedings>
+<book mdate="2021-01-01" key="books/sp/NocedalW99">
+<author>Jorge Nocedal</author>
+<author>Stephen J. Wright</author>
+<title>Numerical Optimization</title>
+<pages>1-636</pages>
+<year>1999</year>
+<publisher>Springer</publisher>
+<isbn>978-0-387-98793-4</isbn>
+<isbn>978-0-387-22742-9</isbn>
+<ee>https://doi.org/10.1007/b98874</ee>
+<ee>https://nbn-resolving.org/urn:nbn:de:test-123</ee>
+</book>
+<phdthesis mdate="2021-07-17" key="phd/dnb/Varnik11">
+<author>Ebadollah Varnik</author>
+<title>Exploitation of structural sparsity in algorithmic differentiation.</title>
+<year>2011</year>
+<pages>1-145</pages>
+<school>RWTH Aachen University</school>
+<ee>http://darwin.example.org/3847.pdf</ee>
+</phdthesis>
+</dblp>
+"""
+
+# a minimal stand-in for the real dblp.dtd: the parser only needs the entity definitions
+DBLP_DTD_FIXTURE = """<!ENTITY auml "&#228;">
+"""
+
+
+def write_dblp_fixture(temp_dir):
+    xml_file = os.path.join(temp_dir, "dblp.xml")
+    with open(xml_file, "w", encoding="iso-8859-1") as f:
+        f.write(DBLP_XML_FIXTURE)
+    with open(os.path.join(temp_dir, "dblp.dtd"), "w", encoding="iso-8859-1") as f:
+        f.write(DBLP_DTD_FIXTURE)
+    return xml_file
 
 
 class TestReffix(unittest.TestCase):
@@ -474,6 +540,175 @@ class TestReffix(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "optional spaCy dependency"):
             reffix._ensure_spacy_nlp()
+
+    def test_local_dblp_builds_index_and_searches(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            xml_file = write_dblp_fixture(temp_dir)
+            local_dblp = LocalDblp(xml_file)
+
+            results = local_dblp.search("Evaluating Semantic Accuracy of Data to Text Generation")
+            self.assertEqual(len(results), 1)
+            entry = results[0]
+
+            self.assertEqual(entry["ID"], "conf/inlg/DusekK20")
+            self.assertEqual(entry["ENTRYTYPE"], "inproceedings")
+            # the trailing dot is stripped and nested markup is flattened
+            self.assertEqual(
+                entry["title"], "Evaluating Semantic Accuracy of Data-to-Text Generation with Natural Language Inference"
+            )
+            self.assertEqual(entry["author"], "Ondrej Dusek and Zdenek Kasner")
+            self.assertEqual(entry["pages"], "131--137")
+            # the first electronic edition becomes the url, and the DOI link
+            # yields the doi field, as in the BibTeX exports of the API
+            self.assertEqual(entry["url"], "https://aclanthology.org/2020.inlg-1.19/")
+            self.assertEqual(entry["doi"], "10.18653/V1/2020.INLG-1.19")
+            # the crossref is resolved to the full venue name, as in the standard export
+            self.assertEqual(
+                entry["booktitle"],
+                "Proceedings of the 13th International Conference on Natural Language Generation, INLG 2020",
+            )
+            self.assertEqual(entry["publisher"], "Association for Computational Linguistics")
+            # the proceedings editors are inlined as well
+            self.assertEqual(entry["editor"], "Brian Davis")
+            self.assertEqual(entry["timestamp"], "2023-05-02")
+            self.assertEqual(entry["bibsource"], "dblp computer science bibliography, https://dblp.org")
+            # the proceedings entry is not part of the output, so no crossref
+            # may be emitted (BibTeX rejects dangling crossrefs)
+            self.assertNotIn("crossref", entry)
+
+            results = local_dblp.search("llm2vec large language models are secretly powerful text encoders")
+            self.assertEqual(len(results), 1)
+            entry = results[0]
+
+            # homonym suffixes are stripped and DTD entities are resolved
+            self.assertEqual(entry["author"], "Parishad BehnamGhader and Kalervo Järvelin")
+            # CoRR articles carry the arXiv identifier, as in the API exports
+            self.assertEqual(entry["eprinttype"], "arXiv")
+            self.assertEqual(entry["eprint"], "2404.05961")
+            self.assertTrue(ut.is_arxiv(entry))
+
+            results = local_dblp.search("numerical optimization")
+            self.assertEqual(len(results), 1)
+            entry = results[0]
+
+            self.assertEqual(entry["ENTRYTYPE"], "book")
+            # of multiple isbn elements (one per edition), the first is kept
+            self.assertEqual(entry["isbn"], "978-0-387-98793-4")
+            self.assertEqual(entry["url"], "https://doi.org/10.1007/b98874")
+            self.assertEqual(entry["doi"], "10.1007/B98874")
+            self.assertEqual(entry["urn"], "urn:nbn:de:test-123")
+            # the API exports omit the page count and booktitle of monographs
+            self.assertNotIn("pages", entry)
+            self.assertNotIn("booktitle", entry)
+
+            results = local_dblp.search("exploitation of structural sparsity in algorithmic differentiation")
+            self.assertEqual(len(results), 1)
+            entry = results[0]
+
+            self.assertEqual(entry["ENTRYTYPE"], "phdthesis")
+            self.assertEqual(entry["school"], "RWTH Aachen University")
+            # the API exports omit the page count of theses as well
+            self.assertNotIn("pages", entry)
+
+            self.assertEqual(local_dblp.search("no such publication anywhere"), [])
+            local_dblp.close()
+
+    def test_local_dblp_reads_gzipped_dump(self):
+        import gzip
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            xml_file = write_dblp_fixture(temp_dir)
+            gz_file = xml_file + ".gz"
+            with open(xml_file, "rb") as f_in, gzip.open(gz_file, "wb") as f_out:
+                f_out.write(f_in.read())
+            os.remove(xml_file)
+
+            local_dblp = LocalDblp(gz_file)
+            results = local_dblp.search("numerical optimization")
+            local_dblp.close()
+
+            self.assertEqual(len(results), 1)
+            self.assertEqual(results[0]["ID"], "books/sp/NocedalW99")
+
+    def test_select_entry_matches_titles_across_latex_and_unicode(self):
+        # entries from the local DBLP dump carry unicode titles, while BibTeX
+        # files typically encode accents in LaTeX; both must match
+        orig_entry = {
+            "title": 'Gr{\\"o}bner Bases and Applications',
+            "author": "Doe, John",
+        }
+        candidate = {
+            "title": "Gröbner Bases and Applications",
+            "author": "John Doe",
+            "year": "1998",
+        }
+
+        selected = reffix.select_entry([candidate], orig_entry, replace_arxiv=False)
+
+        self.assertEqual(selected, candidate)
+
+    def test_local_dblp_reuses_cached_index(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            xml_file = write_dblp_fixture(temp_dir)
+
+            local_dblp = LocalDblp(xml_file)
+            local_dblp.close()
+            index_mtime = os.path.getmtime(local_dblp.index_file)
+
+            local_dblp = LocalDblp(xml_file)
+            local_dblp.close()
+
+            self.assertEqual(os.path.getmtime(local_dblp.index_file), index_mtime)
+
+    def test_local_dblp_requires_dtd(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            xml_file = write_dblp_fixture(temp_dir)
+            os.remove(os.path.join(temp_dir, "dblp.dtd"))
+
+            with self.assertRaisesRegex(FileNotFoundError, "dblp.dtd"):
+                LocalDblp(xml_file)
+
+    def test_process_with_local_dblp_queries_no_api(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            xml_file = write_dblp_fixture(temp_dir)
+            in_file = os.path.join(temp_dir, "test.bib")
+            out_file = os.path.join(temp_dir, "test.fixed.bib")
+
+            with open(in_file, "w") as f:
+                f.write(
+                    "@misc{llm2vec,\n"
+                    "  title = {LLM2Vec: Large Language Models Are Secretly Powerful Text Encoders},\n"
+                    "  author = {BehnamGhader, Parishad},\n"
+                    "  year = {2024}\n"
+                    "}\n"
+                )
+
+            # neither the API wrapper nor the network (and with it the API
+            # rate limiting) may be touched in local mode
+            with patch("reffix.reffix.ut.get_dblp_results", side_effect=AssertionError("API must not be queried")):
+                with patch("reffix.utils.requests.get", side_effect=AssertionError("no network requests allowed")):
+                    reffix.process(
+                        in_file,
+                        out_file,
+                        replace_arxiv=False,
+                        dblp_bibtex_format="standard",
+                        force_titlecase=False,
+                        interact=False,
+                        no_publisher=False,
+                        process_conf_loc=False,
+                        dblp_xml=xml_file,
+                    )
+
+            bp = BibTexParser(interpolate_strings=False, common_strings=True, ignore_nonstandard_types=False)
+            with open(out_file) as bibtex_file:
+                output_db = bibtexparser.load(bibtex_file, parser=bp)
+
+            self.assertEqual(len(output_db.entries), 1)
+            entry = output_db.entries[0]
+            # the entry was replaced with the record from the local dump, keeping the original key
+            self.assertEqual(entry["ID"], "llm2vec")
+            self.assertEqual(entry["url"], "https://arxiv.org/abs/2404.05961")
+            self.assertEqual(entry["journal"], "CoRR")
 
 
 if __name__ == "__main__":
