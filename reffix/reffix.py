@@ -70,16 +70,19 @@ def select_entry(entries, orig_entry, replace_arxiv):
     # (some titles are returned with trailing dot, dashes may be inconsistent, etc.);
     # transliterating first keeps accented characters comparable across their
     # LaTeX and unicode representations
+    if not orig_entry.get("title"):
+        # entries without a title cannot be matched; keep the original one
+        return None
     orig_title = re.sub(r"[^0-9a-zA-Z]+", "", unidecode.unidecode(orig_entry["title"])).lower()
     orig_authors = ut.get_authors_canonical(orig_entry)
 
     # try to find if any entry is better than the original one
     for entry in entries:
-        title = re.sub(r"[^0-9a-zA-Z]+", "", unidecode.unidecode(entry["title"])).lower()
-
-        # skip entries with no authors
-        if "author" not in entry:
+        # skip entries with no authors or no title
+        if "author" not in entry or "title" not in entry:
             continue
+
+        title = re.sub(r"[^0-9a-zA-Z]+", "", unidecode.unidecode(entry["title"])).lower()
 
         authors = ut.get_authors_canonical(entry)
 
