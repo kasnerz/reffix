@@ -630,6 +630,22 @@ class TestReffix(unittest.TestCase):
             self.assertEqual(len(results), 1)
             self.assertEqual(results[0]["ID"], "books/sp/NocedalW99")
 
+    def test_select_entry_without_title_returns_none(self):
+        entries = [{"title": "Test Entry", "author": "John Doe"}]
+
+        # an original entry without a title cannot be matched
+        self.assertIsNone(
+            reffix.select_entry(
+                entries, {"ID": "x", "author": "John Doe"}, replace_arxiv=False
+            )
+        )
+        # a candidate without a title cannot be matched either
+        self.assertIsNone(
+            reffix.select_entry(
+                [{"author": "John Doe"}], self.entry, replace_arxiv=False
+            )
+        )
+
     def test_select_entry_matches_titles_across_latex_and_unicode(self):
         # entries from the local DBLP dump carry unicode titles, while BibTeX
         # files typically encode accents in LaTeX; both must match
